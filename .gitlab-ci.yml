@@ -11,7 +11,7 @@ ruff:
   before_script:
     pip3 install -e .[dev]
   script:
-    ruff check saltbox_discovery_client
+    ruff check saltbox_sdk
   cache:
     paths:
       - '.cache/pip/'
@@ -24,7 +24,7 @@ mypy:
   before_script:
     pip3 install -e .[dev]
   script:
-    mypy saltbox_discovery_client
+    mypy saltbox_sdk
   cache:
     paths:
       - '.cache/pip/'

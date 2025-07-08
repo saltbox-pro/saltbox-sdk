@@ -19,7 +19,7 @@ repos:
     rev: v0.11.6
     hooks:
       - id: ruff
-        args: ["check", "--fix"]  # fixes all
-        files: "^saltbox_discovery_client/"
+        args: ["check", "--select", "I", "--fix"]
+        files: "^saltbox_sdk/"
       - id: ruff-format
-        files: "^saltbox_discovery_client/"
+        files: "^saltbox_sdk/"
