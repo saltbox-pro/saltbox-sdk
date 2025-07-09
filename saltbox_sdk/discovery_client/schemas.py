@@ -76,7 +76,7 @@ class ServiceFrontendConfig(BaseModel):
 
 
 class ServiceSchema(BaseModel):
-    name: str
+    name: str = Field(title='Service name', pattern=r'^[a-z0-9-]+$', min_length=3, max_length=30)
     title: str
     description: str
     vendor: str
