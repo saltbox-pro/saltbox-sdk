@@ -5,6 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    log_level: str = 'INFO'
     base_url: str
     discovery_url: str
     service_name: str
@@ -16,7 +17,6 @@ class Settings(BaseSettings):
     instance_port: int
     front_container_name: str
     front_container_port: int
-    log_level: str = 'INFO'
 
     model_config = SettingsConfigDict(env_file='.env', env_prefix='DISCOVERY_')
 

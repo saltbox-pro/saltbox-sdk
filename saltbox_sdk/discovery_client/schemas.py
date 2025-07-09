@@ -77,14 +77,12 @@ class ServiceFrontendConfig(BaseModel):
 
 class ServiceSchema(BaseModel):
     name: str
-    # path: str
     title: str
     description: str
     vendor: str
     type: ServiceType
     instances: list[ServiceInstance]
     front_config: ServiceFrontendConfig
-    # endpoints: list[ServiceEndpoint] = []
     enabled: bool = True
     load_balancing_strategy: ProxyBalancingStrategy = ProxyBalancingStrategy.RANDOM
 

@@ -6,9 +6,9 @@ readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.12"
 dependencies = [
-  'httpx~=0.27.0',
-  'pydantic~=2.11.3',
-  'pydantic-settings~=2.9.1',
+  "httpx~=0.27.0",
+  "pydantic~=2.11.3",
+  "pydantic-settings~=2.9.1",
 ]
 
 [tool.setuptools.dynamic]
@@ -22,16 +22,16 @@ Repository = "https://dev.saltbox.pro/saltbox/saltbox-sdk"
 
 [project.optional-dependencies]
 dev = [
-  'mypy>=1.16.1',
-  'pre-commit>=4.2.0',
-  'ruff>=0.11.13',
+  "mypy>=1.16.1",
+  "pre-commit>=4.2.0",
+  "ruff>=0.11.13",
 ]
 
 [dependency-groups]
 dev = [
-  'mypy>=1.16.1',
-  'pre-commit>=4.2.0',
-  'ruff>=0.11.13',
+  "mypy>=1.16.1",
+  "pre-commit>=4.2.0",
+  "ruff>=0.11.13",
 ]
 
 [build-system]
@@ -90,9 +90,9 @@ ignore = [
 ]
 fixable = ["ALL"]
 unfixable = [
-  'F401',   # Unused import
-  'F841',   # Unused variable
-  'UP035',  # Deprecated import
+  "F401",   # Unused import
+  "F841",   # Unused variable
+  "UP035",  # Deprecated import
 ]
 
 [tool.ruff.lint.flake8-quotes]
