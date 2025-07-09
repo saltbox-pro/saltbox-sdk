@@ -45,7 +45,7 @@ class LogConfig(BaseModel):
         },
     }
     loggers: dict = {
-        'salt_box_core': {
+        'saltbox_sdk': {
             'handlers': ['default'],
             'level': LOG_LEVEL,
             'propagate': False,
@@ -57,4 +57,4 @@ LOG_CONFIG = LogConfig()
 
 logging.config.dictConfig(LOG_CONFIG.model_dump())
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('saltbox_sdk')
