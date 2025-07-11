@@ -19,7 +19,11 @@ from saltbox_sdk.discovery_client.schemas import (
 
 
 class DiscoveryClient:
-    def __init__(self, openapi_schema: dict[str, Any], httpx_client: httpx.AsyncClient | None = None):
+    def __init__(
+        self,
+        openapi_schema: dict[str, Any],
+        httpx_client: httpx.AsyncClient | None = None,
+    ):
         self._httpx_client = httpx_client or httpx.AsyncClient()
         self._openapi_schema = openapi_schema
 
@@ -126,6 +130,7 @@ class DiscoveryClient:
     async def check_discovery_service(self) -> bool:
         """Проверяет доступность сервиса Discovery"""
         try:
+            logger.debug('Checking Discovery service availability on %s', SETTINGS.discovery_url)
             response = await self._httpx_client.get(f'{SETTINGS.discovery_url}/health', timeout=2.0)
             return response.status_code == 200
         except Exception as e:
