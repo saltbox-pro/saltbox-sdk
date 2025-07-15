@@ -28,7 +28,9 @@ class DiscoveryClient:
         self._openapi_schema = openapi_schema
 
     def __get_or_create_instance_id(self) -> str:
-        file_path = Path(__file__).parent / 'instance_id.txt'
+        file_path = (
+            Path(__file__).parent.parent / f'data/{SETTINGS.service_name}_instance_{socket.gethostname()}_id.txt'
+        )
         if Path.exists(file_path):
             with Path.open(file_path) as f:
                 logger.debug('Using existing instance ID')
@@ -103,6 +105,7 @@ class DiscoveryClient:
     async def register(self) -> None:
         service = await self._create_service_object()
         registration_data = service.model_dump()
+        logger.debug(f'Discovery URL: {SETTINGS.discovery_url}')
 
         while True:
             if not await self.check_discovery_service():
@@ -130,7 +133,7 @@ class DiscoveryClient:
     async def check_discovery_service(self) -> bool:
         """Проверяет доступность сервиса Discovery"""
         try:
-            logger.debug('Checking Discovery service availability on %s', SETTINGS.discovery_url)
+            logger.debug('Checking Discovery service availability on %s/health', SETTINGS.discovery_url)
             response = await self._httpx_client.get(f'{SETTINGS.discovery_url}/health', timeout=2.0)
             return response.status_code == 200
         except Exception as e:
