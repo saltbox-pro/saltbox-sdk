@@ -1,5 +1,5 @@
 # Python
-*.egg-info
+# *.egg-info
 *.pyc
 .coverage
 .flake8
@@ -22,4 +22,3 @@ htmlcov/
 
 # Other
 /_*
-instance_id.txt
