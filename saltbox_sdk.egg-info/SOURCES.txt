@@ -15,6 +15,7 @@ saltbox_sdk.egg-info/SOURCES.txt
 saltbox_sdk.egg-info/dependency_links.txt
 saltbox_sdk.egg-info/requires.txt
 saltbox_sdk.egg-info/top_level.txt
+saltbox_sdk/data/.gitignore
 saltbox_sdk/discovery_client/__init__.py
 saltbox_sdk/discovery_client/client.py
 saltbox_sdk/discovery_client/errors.py
