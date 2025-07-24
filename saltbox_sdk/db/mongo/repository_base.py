@@ -1,7 +1,7 @@
 from collections.abc import Callable
 from datetime import UTC, datetime
 from inspect import isclass
-from typing import Any, ClassVar, Generic, TypeVar, cast, overload
+from typing import Any, ClassVar, TypeVar, cast, overload
 
 from pydantic import BaseModel
 from pymongo.asynchronous.collection import AsyncCollection
@@ -21,12 +21,11 @@ from saltbox_sdk.db.mongo.schemas_base import PyObjectId
 from saltbox_sdk.http_errors import BadRequest
 from saltbox_sdk.utilities.helpers import recursive_replace_dates
 
-T = TypeVar('T', bound=BaseModel)
 ProjectionModel = TypeVar('ProjectionModel', bound=BaseModel)
 ModelType = TypeVar('ModelType', bound=BaseModel)
 
 
-class BaseMongoRepository(AbstractRepository[T], Generic[T]):
+class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
     class Meta:
         collection_name: ClassVar[str]
         auto_now_add_fields: ClassVar[list[str]]

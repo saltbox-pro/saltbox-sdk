@@ -1,4 +1,4 @@
-from typing import Any, Generic, TypeVar, overload
+from typing import Any, TypeVar, overload
 
 from pydantic import BaseModel
 
@@ -7,14 +7,15 @@ from saltbox_sdk.db.mongo.schemas_base import PyObjectId
 from saltbox_sdk.db.schemas_base import PaginatedResponse
 from saltbox_sdk.serivces.abc_service import AbstractService
 
-Repository = TypeVar('Repository', bound=BaseMongoRepository)
 ProjectionModel = TypeVar('ProjectionModel', bound=BaseModel)
-ModelType = TypeVar('ModelType', bound=BaseModel)
-CreateSchema = TypeVar('CreateSchema', bound=BaseModel)
-UpdateSchema = TypeVar('UpdateSchema', bound=BaseModel)
 
 
-class MongoBaseService(AbstractService[Repository], Generic[Repository, ModelType, CreateSchema, UpdateSchema]):
+class MongoBaseService[
+    Repository: BaseMongoRepository,
+    ModelType: BaseModel,
+    CreateSchema: BaseModel,
+    UpdateSchema: BaseModel,
+](AbstractService[Repository]):
     @overload
     async def get(self, query: dict[str, Any] | PyObjectId) -> ModelType: ...
 

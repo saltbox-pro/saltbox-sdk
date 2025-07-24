@@ -1,5 +1,5 @@
 import json
-from typing import Any, Generic, TypeVar, overload
+from typing import Any, TypeVar, overload
 
 from pydantic import BaseModel
 
@@ -8,16 +8,15 @@ from saltbox_sdk.db.redis.schemas_base import SortedSetId
 from saltbox_sdk.db.schemas_base import CursoredResponse, PaginatedResponse
 from saltbox_sdk.serivces.abc_service import AbstractService
 
-Repository = TypeVar('Repository', bound=SortedsetRedisRepository)
 ProjectionModel = TypeVar('ProjectionModel', bound=BaseModel)
-ModelType = TypeVar('ModelType', bound=BaseModel)
-CreateSchema = TypeVar('CreateSchema', bound=BaseModel)
-UpdateSchema = TypeVar('UpdateSchema', bound=BaseModel)
 
 
-class RedisSortedsetBaseService(
-    AbstractService[Repository], Generic[Repository, ModelType, CreateSchema, UpdateSchema]
-):
+class RedisSortedsetBaseService[
+    Repository: SortedsetRedisRepository,
+    ModelType: BaseModel,
+    CreateSchema: BaseModel,
+    UpdateSchema: BaseModel,
+](AbstractService[Repository]):
     @overload
     async def get(self, query: SortedSetId | int | float) -> ModelType: ...
 

@@ -1,17 +1,16 @@
 from abc import ABC, abstractmethod
-from typing import Any, Generic, TypeVar
+from typing import Any, TypeVar
 
 from pydantic import BaseModel
 
 from saltbox_sdk.db.abc_repository import AbstractRepository
 from saltbox_sdk.db.schemas_base import PaginatedResponse
 
-Repository = TypeVar('Repository', bound=AbstractRepository)
 ModelType = TypeVar('ModelType', bound=BaseModel)
 ProjectionModel = TypeVar('ProjectionModel', bound=BaseModel)
 
 
-class AbstractService(ABC, Generic[Repository]):
+class AbstractService[Repository: AbstractRepository](ABC):
     def __init__(self, repo: Repository) -> None:
         self.repo: Repository = repo
 

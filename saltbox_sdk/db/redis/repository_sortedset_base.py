@@ -1,6 +1,6 @@
 import json
 from datetime import UTC, datetime
-from typing import Any, Generic, TypeVar, overload
+from typing import Any, TypeVar, overload
 
 from pydantic import BaseModel
 from redis.asyncio import Redis
@@ -14,12 +14,11 @@ from saltbox_sdk.db.exceptions import (
 )
 from saltbox_sdk.db.redis.schemas_base import SortedSetId
 
-T = TypeVar('T', bound=BaseModel)
 ProjectionModel = TypeVar('ProjectionModel', bound=BaseModel)
 ModelType = TypeVar('ModelType', bound=BaseModel)
 
 
-class SortedsetRedisRepository(AbstractRepository[T], Generic[T]):
+class SortedsetRedisRepository[T: BaseModel](AbstractRepository[T]):
     class Meta:
         collection_name: str
         id_field_name: str = 'id'

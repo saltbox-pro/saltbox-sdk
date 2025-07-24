@@ -1,12 +1,10 @@
 from abc import ABC, abstractmethod
-from typing import Any, Generic, TypeVar
+from typing import Any
 
 from pydantic import BaseModel
 
-T = TypeVar('T', bound=BaseModel)
 
-
-class AbstractRepository(ABC, Generic[T]):
+class AbstractRepository[T: BaseModel](ABC):
     @abstractmethod
     async def get(self, *args: Any, **kwargs: Any) -> T: ...
 

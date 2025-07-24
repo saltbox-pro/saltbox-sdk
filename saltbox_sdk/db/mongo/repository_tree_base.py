@@ -1,10 +1,10 @@
 from enum import Enum, auto
-from typing import Any, Generic, overload
+from typing import Any, overload
 
 from pydantic import BaseModel
 
 from saltbox_sdk.db.exceptions import MultipleObjectsFoundError, ObjectDeleteError, ObjectNotFoundError
-from saltbox_sdk.db.mongo.repository_base import BaseMongoRepository, ModelType, ProjectionModel, T
+from saltbox_sdk.db.mongo.repository_base import BaseMongoRepository, ModelType, ProjectionModel
 from saltbox_sdk.db.mongo.schemas_base import BaseTreeModel, PyObjectId
 
 
@@ -13,7 +13,7 @@ class OnDelete(Enum):
     protected = auto()
 
 
-class BaseTreeMongoRepository(BaseMongoRepository[T], Generic[T]):
+class BaseTreeMongoRepository[T: BaseModel](BaseMongoRepository[T]):
     class Meta(BaseMongoRepository.Meta):
         on_delete = OnDelete.protected
 
