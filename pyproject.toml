@@ -24,6 +24,7 @@ Repository = "https://dev.saltbox.pro/saltbox/saltbox-sdk"
 dev = [
   "mypy>=1.17.0",
   "pre-commit>=4.2.0",
+  "types-redis",
   "ruff>=0.12.3",
 ]
 rest = [
