@@ -10,6 +10,8 @@
 /uv.lock
 __pycache__
 htmlcov/
+build/*
+*.egg-info/*
 
 # Virtual environments
 */.venv
@@ -22,3 +24,4 @@ htmlcov/
 
 # Other
 /_*
+!.gitignore

@@ -1,8 +1,12 @@
 import logging.config
+import os
+from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+ENV_FILE = Path(os.environ.get('SALTBOX_ENV_FILE', '.env'))
 
 
 class Settings(BaseSettings):
@@ -19,7 +23,7 @@ class Settings(BaseSettings):
     front_container_name: str
     front_container_port: int
 
-    model_config = SettingsConfigDict(env_file='.env', env_prefix='DISCOVERY_')
+    model_config = SettingsConfigDict(env_file=ENV_FILE, env_prefix='DISCOVERY_', extra='ignore')
 
 
 SETTINGS = Settings()
