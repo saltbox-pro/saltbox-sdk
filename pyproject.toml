@@ -26,12 +26,30 @@ dev = [
   "pre-commit>=4.2.0",
   "ruff>=0.12.3",
 ]
+rest = [
+  "fastapi~=0.115.4",
+]
+mongo = [
+  "pymongo~=4.11",
+]
+redis = [
+  "redis~=5.2.0",
+]
 
 [dependency-groups]
 dev = [
   "mypy>=1.17.0",
   "pre-commit>=4.2.0",
   "ruff>=0.12.3",
+]
+rest = [
+  "fastapi~=0.115.4",
+]
+mongo = [
+  "pymongo~=4.11",
+]
+redis = [
+  "redis~=5.2.0",
 ]
 
 [build-system]
