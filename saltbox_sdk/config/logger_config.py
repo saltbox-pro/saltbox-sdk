@@ -11,7 +11,7 @@ ENV_FILE = Path(os.environ.get('SALTBOX_ENV_FILE', '.env'))
 class LoggerSettings(BaseSettings):
     log_level: str = 'INFO'
 
-    model_config = SettingsConfigDict(env_file=ENV_FILE)
+    model_config = SettingsConfigDict(env_file=ENV_FILE, extra='ignore')
 
 
 LOGGER_SETTINGS = LoggerSettings()
