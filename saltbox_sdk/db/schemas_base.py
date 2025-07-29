@@ -1,8 +1,6 @@
-from pydantic import (
-    BaseModel,
-    Field,
-)
+from pydantic import BaseModel, Field, computed_field
 
+from saltbox_sdk.config.keycloak_config import KC_SETTINGS
 from saltbox_sdk.utilities.helpers import Iso8601ZDatetime as TimezoneAwareDatetime
 
 
@@ -24,3 +22,27 @@ class CursoredResponse[SchemaType: BaseModel](BaseModel):
 class SkipLimitParams(BaseModel):
     skip: int = Field(default=0, ge=0)
     limit: int = Field(default=0, ge=0)
+
+
+class AccessModel(BaseModel):
+    roles: list[str] = Field(default=[])
+
+
+class User(BaseModel):
+    sub: str
+    resource_access: dict[str, AccessModel] | None = Field(default=None, exclude=True)
+    email_verified: bool
+    name: str
+    email: str
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def roles(self) -> list[str]:
+        client_roles: list[str] = []
+        if self.resource_access:
+            try:
+                client_roles = self.resource_access[KC_SETTINGS.client].roles
+            except KeyError:
+                pass
+
+        return client_roles

@@ -46,7 +46,7 @@ Iso8601ZDatetime = Annotated[
     datetime,
     AfterValidator(make_aware),
     PlainSerializer(format_iso8601_z, when_used='json'),
-    'Aware datetime serializing with Z-suffix. Unaware datetime decides UTC.'
+    'Aware datetime serializing with Z-suffix. Unaware datetime decides UTC.',
 ]
 
 

@@ -4,7 +4,8 @@ from pymongo import AsyncMongoClient, MongoClient
 from pymongo.asynchronous.database import AsyncDatabase
 from pymongo.database import Database
 
-from saltbox_sdk.config import MONGO_SETTINGS, logger
+from saltbox_sdk.config.logger_config import logger
+from saltbox_sdk.config.mongo_config import MONGO_SETTINGS
 
 
 class _MongoClientSingleton:

@@ -2,7 +2,8 @@ from typing import Any
 
 from fastapi.openapi.utils import get_openapi
 
-from saltbox_sdk.config import KC_SETTINGS, logger
+from saltbox_sdk.config.keycloak_config import KC_SETTINGS
+from saltbox_sdk.config.logger_config import logger
 
 
 def get_custom_openapi_schema(

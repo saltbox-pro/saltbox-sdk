@@ -7,7 +7,8 @@ from typing import Any
 import httpx
 
 from saltbox_sdk import __version__
-from saltbox_sdk.config import SETTINGS, logger
+from saltbox_sdk.config.discovery_config import DISCOVERY_SETTINGS
+from saltbox_sdk.config.logger_config import logger
 from saltbox_sdk.discovery_client.schemas import (
     OPAConfig,
     ProxyBalancingStrategy,
@@ -30,7 +31,8 @@ class DiscoveryClient:
 
     def __get_or_create_instance_id(self) -> str:
         file_path = (
-            Path(__file__).parent.parent / f'data/{SETTINGS.service_name}_instance_{socket.gethostname()}_id.txt'
+            Path(__file__).parent.parent
+            / f'data/{DISCOVERY_SETTINGS.service_name}_instance_{socket.gethostname()}_id.txt'
         )
         if Path.exists(file_path):
             with Path.open(file_path) as f:
@@ -74,7 +76,7 @@ class DiscoveryClient:
             id=self.__get_or_create_instance_id(),
             # host=DISCOVERY_CONFIG.instance_host,
             host=socket.gethostname(),
-            port=SETTINGS.instance_port,
+            port=DISCOVERY_SETTINGS.instance_port,
             base_route='',
             version=__version__,
             health_check_path='/discovery/health',
@@ -84,20 +86,20 @@ class DiscoveryClient:
         )
 
         front_config = ServiceFrontendConfig(
-            url=f'{SETTINGS.server_scheme}://{SETTINGS.server_outer_socket.strip("/")}/static/{SETTINGS.service_name}',
-            static_host=f'http://{SETTINGS.front_container_name}:{SETTINGS.front_container_port}',
+            url=f'{DISCOVERY_SETTINGS.server_scheme}://{DISCOVERY_SETTINGS.server_outer_socket.strip("/")}/static/{DISCOVERY_SETTINGS.service_name}',
+            static_host=f'http://{DISCOVERY_SETTINGS.front_container_name}:{DISCOVERY_SETTINGS.front_container_port}',
             env=ServiceFrontendEnv(
-                api_base_path=f'{SETTINGS.server_scheme}://{SETTINGS.server_outer_socket.strip("/")}/api/{SETTINGS.service_name}',
-                ws_server_url=f'{SETTINGS.server_ws_scheme}://{SETTINGS.server_outer_socket.strip("/")}/api/{SETTINGS.service_name}',
+                api_base_path=f'{DISCOVERY_SETTINGS.server_scheme}://{DISCOVERY_SETTINGS.server_outer_socket.strip("/")}/api/{DISCOVERY_SETTINGS.service_name}',
+                ws_server_url=f'{DISCOVERY_SETTINGS.server_ws_scheme}://{DISCOVERY_SETTINGS.server_outer_socket.strip("/")}/api/{DISCOVERY_SETTINGS.service_name}',
             ),
         )
 
         return ServiceSchema(
-            name=SETTINGS.service_name,
-            title=SETTINGS.service_title,
-            description=SETTINGS.service_description,
-            type=SETTINGS.service_type,
-            vendor=SETTINGS.service_vendor,
+            name=DISCOVERY_SETTINGS.service_name,
+            title=DISCOVERY_SETTINGS.service_title,
+            description=DISCOVERY_SETTINGS.service_description,
+            type=DISCOVERY_SETTINGS.service_type,
+            vendor=DISCOVERY_SETTINGS.service_vendor,
             instances=[instance],
             enabled=True,
             load_balancing_strategy=ProxyBalancingStrategy.ROUND_ROBIN,
@@ -107,7 +109,7 @@ class DiscoveryClient:
     async def register(self) -> None:
         service = await self._create_service_object()
         registration_data = service.model_dump()
-        logger.debug(f'Discovery URL: {SETTINGS.discovery_url}')
+        logger.debug(f'Discovery URL: {DISCOVERY_SETTINGS.discovery_url}')
 
         while True:
             if not await self.check_discovery_service():
@@ -116,7 +118,7 @@ class DiscoveryClient:
                 continue
             try:
                 response = await self._httpx_client.post(
-                    f'{SETTINGS.discovery_url}/register',
+                    f'{DISCOVERY_SETTINGS.discovery_url}/register',
                     json=registration_data,
                     timeout=2.0,
                     headers={'Content-Type': 'application/json'},
@@ -135,8 +137,8 @@ class DiscoveryClient:
     async def check_discovery_service(self) -> bool:
         """Проверяет доступность сервиса Discovery"""
         try:
-            logger.debug('Checking Discovery service availability on %s/health', SETTINGS.discovery_url)
-            response = await self._httpx_client.get(f'{SETTINGS.discovery_url}/health', timeout=2.0)
+            logger.debug('Checking Discovery service availability on %s/health', DISCOVERY_SETTINGS.discovery_url)
+            response = await self._httpx_client.get(f'{DISCOVERY_SETTINGS.discovery_url}/health', timeout=2.0)
             return response.status_code == 200
         except Exception as e:
             logger.error(f'Error checking discovery service: {e}')
