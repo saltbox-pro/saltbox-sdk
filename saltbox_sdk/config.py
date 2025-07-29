@@ -11,7 +11,9 @@ ENV_FILE = Path(os.environ.get('SALTBOX_ENV_FILE', '.env'))
 
 class Settings(BaseSettings):
     log_level: str = 'INFO'
-    base_url: str
+    server_outer_socket: str
+    server_scheme: str
+    server_ws_scheme: str
     discovery_url: str
     service_name: str
     service_title: str

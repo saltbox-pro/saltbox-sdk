@@ -84,11 +84,11 @@ class DiscoveryClient:
         )
 
         front_config = ServiceFrontendConfig(
-            url=f'{SETTINGS.base_url}/static/{SETTINGS.service_name}',
+            url=f'{SETTINGS.server_scheme}://{SETTINGS.server_outer_socket.strip("/")}/static/{SETTINGS.service_name}',
             static_host=f'http://{SETTINGS.front_container_name}:{SETTINGS.front_container_port}',
             env=ServiceFrontendEnv(
-                api_base_path=f'{SETTINGS.base_url.strip("/")}/api/{SETTINGS.service_name}',
-                ws_server_url=f'ws://{SETTINGS.base_url.removeprefix("http://").removesuffix("/")}/api/{SETTINGS.service_name}',
+                api_base_path=f'{SETTINGS.server_scheme}://{SETTINGS.server_outer_socket.strip("/")}/api/{SETTINGS.service_name}',
+                ws_server_url=f'{SETTINGS.server_ws_scheme}://{SETTINGS.server_outer_socket.strip("/")}/api/{SETTINGS.service_name}',
             ),
         )
 
