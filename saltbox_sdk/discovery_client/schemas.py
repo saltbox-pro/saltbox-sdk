@@ -1,6 +1,6 @@
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ProxyBalancingStrategy(str, Enum):
@@ -27,11 +27,29 @@ class OPAQueryFilterFormat(str, Enum):
 
 
 class OPAConfig(BaseModel):
-    policy: str = 'public'
-    is_partial: bool = False
-    partial_query: str | None = None
-    unknowns: list[str] | None = None
-    query_filter_format: OPAQueryFilterFormat | None = None
+    """OPA configuration for service endpoints.
+
+    Fields:
+        policy: OPA policy package name (e.g., 'core.collections')
+        partial: Whether the Gateway should use partial evaluation for this endpoint
+        partial_query: Policy statement for partial evaluation
+        unknowns: List of unknowns to pass to OPA
+        query_filter_format: Filter format returned by OPAClient
+        action: One of resource actions defined in resource model (e.g., 'read', 'write')
+    """
+
+    policy: str = Field(default='public', serialization_alias='x-opa-policy')
+    is_partial: bool = Field(False, serialization_alias='x-opa-partial')
+    partial_query: str | None = Field(None, serialization_alias='x-opa-partial-query')
+    unknowns: list[str] | None = Field(None, serialization_alias='x-opa-unknowns')
+    query_filter_format: OPAQueryFilterFormat | None = Field(None, serialization_alias='x-opa-query-filter-format')
+    action: str | None = Field(None, serialization_alias='x-opa-action')
+
+    model_config = ConfigDict(extra='forbid', populate_by_name=True)
+
+
+class GatewayEndpointConfig(OPAConfig):
+    cache_ttl: int | None = Field(0, serialization_alias='x-cache-ttl')
 
 
 class ServiceEndpoint(BaseModel):

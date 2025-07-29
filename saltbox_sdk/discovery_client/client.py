@@ -9,6 +9,7 @@ import httpx
 from saltbox_sdk import __version__
 from saltbox_sdk.config import SETTINGS, logger
 from saltbox_sdk.discovery_client.schemas import (
+    OPAConfig,
     ProxyBalancingStrategy,
     ServiceEndpoint,
     ServiceFrontendConfig,
@@ -52,13 +53,13 @@ class DiscoveryClient:
                             method=method.upper(),
                             summary=details.get('summary', ''),
                             description=details.get('description', ''),
-                            opa_config={
-                                'policy': details.get('x-opa-policy', 'public'),
-                                'is_partial': details.get('x-opa-partial', False),
-                                'partial_query': details.get('x-opa-query', None),
-                                'unknowns': details.get('x-opa-unknowns', None),
-                                'query_filter_format': details.get('x-opa-query-filter-format', None),
-                            },
+                            opa_config=OPAConfig(
+                                policy=details.get('x-opa-policy', 'public'),
+                                is_partial=details.get('x-opa-partial', False),
+                                partial_query=details.get('x-opa-partial-query', None),
+                                unknowns=details.get('x-opa-unknowns', None),
+                                query_filter_format=details.get('x-opa-query-filter-format', None),
+                            ),
                             cache_ttl=details.get('x-cache-ttl', 0),
                         )
                     )
@@ -87,6 +88,7 @@ class DiscoveryClient:
             static_host=f'http://{SETTINGS.front_container_name}:{SETTINGS.front_container_port}',
             env=ServiceFrontendEnv(
                 api_base_path=f'{SETTINGS.base_url.strip("/")}/api/{SETTINGS.service_name}',
+                ws_server_url=f'ws://{SETTINGS.base_url.removeprefix("http://").removesuffix("/")}/api/{SETTINGS.service_name}',
             ),
         )
 
