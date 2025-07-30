@@ -4,6 +4,7 @@ from typing import Any, TypeVar, overload
 
 from pydantic import BaseModel
 from redis.asyncio import Redis
+from redis.exceptions import ResponseError as RedisResponseError
 
 # from sa.saltbox_sdk import logger
 from saltbox_sdk.db.abc_repository import AbstractRepository
@@ -91,7 +92,13 @@ class SortedsetRedisRepository[T: BaseModel](AbstractRepository[T]):
     async def zscan(
         self, cursor: int = 0, match: str | None = None, count: int | None = None
     ) -> tuple[int, list[tuple[str, float]]]:
-        return await self._database.zscan(name=self.Meta.collection_name, cursor=cursor, match=match, count=count)
+        try:
+            return await self._database.zscan(name=self.Meta.collection_name, cursor=cursor, match=match, count=count)
+        except RedisResponseError as e:
+            if 'invalid cursor' in str(e):
+                msg = f'Некорректное значение курсора: {cursor}'
+                raise ValueError(msg) from None
+            raise
 
     @overload
     async def get_list(self, start: int, end: int | None, limit: int | None, skip: int, desc: bool) -> list[T]: ...
