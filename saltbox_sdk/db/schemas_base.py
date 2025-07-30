@@ -28,12 +28,15 @@ class AccessModel(BaseModel):
     roles: list[str] = Field(default=[])
 
 
-class User(BaseModel):
-    sub: str
+class UserShort(BaseModel):
+    sub: str = Field(title='User ID')
+    email: str = Field(title='User email', default='anonymous@localhost')
+    email_verified: bool = Field(title='Is email verified', default=False)
+    name: str = Field(title='User name', default='Anonymous')
+
+
+class User(UserShort):
     resource_access: dict[str, AccessModel] | None = Field(default=None, exclude=True)
-    email_verified: bool
-    name: str
-    email: str
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -46,3 +49,12 @@ class User(BaseModel):
                 pass
 
         return client_roles
+
+
+ANONYMOUS_USER = User(
+    sub='anonymous',
+    resource_access=None,
+    email_verified=False,
+    name='Anonymous',
+    email='anonymous@localhost',
+)

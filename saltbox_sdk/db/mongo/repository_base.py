@@ -18,7 +18,7 @@ from saltbox_sdk.db.exceptions import (
     ObjectUpdateError,
 )
 from saltbox_sdk.db.mongo.schemas_base import PyObjectId
-from saltbox_sdk.http_errors import BadRequest
+from saltbox_sdk.fastapi_utils.http_errors import BadRequest
 from saltbox_sdk.utilities.helpers import recursive_replace_dates
 
 ProjectionModel = TypeVar('ProjectionModel', bound=BaseModel)

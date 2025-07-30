@@ -1,8 +1,6 @@
 import logging
 from collections.abc import AsyncGenerator
-from typing import Annotated
 
-from fastapi import Depends
 from redis.asyncio import ConnectionPool, Redis
 
 from saltbox_sdk.config.redis_config import REDIS_SETTINGS
@@ -26,10 +24,3 @@ async def get_redis() -> AsyncGenerator[Redis, None]:
     yield redis
     LOGGER.debug('Close redis connection now')
     await redis.aclose()  # type: ignore[attr-defined]
-
-
-RedisDependency = Annotated[Redis, Depends(get_redis)]
-
-
-def get_redis_dep(redis: RedisDependency) -> Redis:
-    return redis
