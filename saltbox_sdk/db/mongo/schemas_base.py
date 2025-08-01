@@ -18,7 +18,7 @@ from pydantic_core.core_schema import (
 )
 
 IS_PYDANTIC_V2_10 = int(pydantic.VERSION.split('.')[0]) >= 2 and int(pydantic.VERSION.split('.')[1]) >= 10
-ALLOWED_MONGO_QUERY_KEYS = [
+ALLOWED_MONGO_PIPELINE_QUERY_KEYS = [
     '$and',
     '$or',
     '$nor',
@@ -37,11 +37,8 @@ ALLOWED_MONGO_QUERY_KEYS = [
     '$jsonSchema',
     '$mod',
     '$regex',
-    '$text',
-    '$where',
     '$geoIntersects',
     '$geoWithin',
-    '$geoNear',
     '$near',
     '$nearSphere',
     '$all',
@@ -51,6 +48,12 @@ ALLOWED_MONGO_QUERY_KEYS = [
     '$bitsAllSet',
     '$bitsAnyClear',
     '$bitsAnySet',
+]
+ALLOWED_MONGO_QUERY_KEYS = [
+    *ALLOWED_MONGO_PIPELINE_QUERY_KEYS,
+    '$text',
+    '$where',
+    '$geoNear',
     '$comment',
     '$meta',
     '$slice',
@@ -71,7 +74,23 @@ def validate_mongo_query(value: dict[str, Any]) -> dict[str, Any]:
     return value
 
 
+def validate_pipeline_query(value: dict[str, Any]) -> dict[str, Any]:
+    for key, val in value.items():
+        if key.startswith('$') and key not in ALLOWED_MONGO_PIPELINE_QUERY_KEYS:
+            msg = f'Invalid or unsupported operator `{key}`'
+            raise ValueError(msg)
+        if isinstance(val, dict):
+            validate_pipeline_query(val)
+
+        if key in {'$and', '$or', '$in'} and not isinstance(val, list):
+            msg = f'Value for `{key}` must be a `list`'
+            raise ValueError(msg)
+    return value
+
+
 MongoQuery = Annotated[dict[str, Any], AfterValidator(validate_mongo_query)]
+
+PipelineMongoQuery = Annotated[dict[str, Any], AfterValidator(validate_pipeline_query)]
 
 
 class PyObjectId(ObjectId):

@@ -33,13 +33,6 @@ class UserHeadersMissingException(SaltBoxBaseException):
 
 
 # Base exceptions
-class BadRequestException(SaltBoxBaseException):
-    """Raised when a bad request is made to the service."""
-
-    status_code: int = status.HTTP_400_BAD_REQUEST
-    detail: str = 'Bad request made to the service.'
-
-
 class NotFoundException(SaltBoxBaseException):
     """Raised when a requested resource is not found."""
 
@@ -82,7 +75,7 @@ class MultipleObjectsFoundException(RepositoryException):
 class DuplicateKeyException(RepositoryException):
     """Raised when a duplicate key is encountered in the repository."""
 
-    status_code: int = status.HTTP_409_CONFLICT
+    status_code: int = status.HTTP_400_BAD_REQUEST
     detail: str = 'Duplicate key error.'
 
 

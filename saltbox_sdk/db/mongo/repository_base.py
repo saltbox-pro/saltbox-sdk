@@ -229,7 +229,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         try:
             result = await self.collection.insert_one(data)
         except MongoDuplicateKeyError as e:
-            raise DuplicateKeyException() from e
+            raise DuplicateKeyException(str(e)) from None
 
         if not result.inserted_id:
             raise ObjectCreateException()
@@ -267,7 +267,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         try:
             data = await self.validate_object_data(data)
         except ValueError as e:
-            raise ObjectCreateException(str(e)) from e
+            raise ObjectUpdateException(str(e)) from e
         query = self.__prepare_query__(query)
 
         if isinstance(data, BaseModel):
@@ -276,6 +276,8 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         if hasattr(self.Meta, 'auto_now_fields') and self.Meta.auto_now_fields:
             for field in self.Meta.auto_now_fields:
                 data[field] = datetime.now(UTC)
+        if not await self.exists(query):
+            raise ObjectNotFoundException(obj_type=self.Meta.collection_name, query=query)
 
         result = await self.collection.update_one(query, {'$set': data}, upsert=False)
         if result.modified_count == 0:
