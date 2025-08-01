@@ -3,9 +3,14 @@ from typing import Any, overload
 
 from pydantic import BaseModel
 
-from saltbox_sdk.db.exceptions import MultipleObjectsFoundError, ObjectDeleteError, ObjectNotFoundError
 from saltbox_sdk.db.mongo.repository_base import BaseMongoRepository, ModelType, ProjectionModel
 from saltbox_sdk.db.mongo.schemas_base import BaseTreeModel, PyObjectId
+from saltbox_sdk.exceptions import (
+    MultipleObjectsFoundException,
+    ObjectDeleteException,
+    ObjectNotFoundException,
+    SaltBoxValidationException,
+)
 
 
 class OnDelete(Enum):
@@ -33,12 +38,12 @@ class BaseTreeMongoRepository[T: BaseModel](BaseMongoRepository[T]):
                 target_id = target.id
             else:
                 msg = 'Target must be have "id" field"'
-                raise TypeError(msg)
+                raise SaltBoxValidationException(msg)
         elif isinstance(target, PyObjectId):
             target_id = target
         else:
             msg = 'Unknown target type'  # type: ignore
-            raise TypeError(msg)
+            raise SaltBoxValidationException(msg)
 
         if projection_model is not None:
             return await self.get_list({'parent_id': target_id}, projection_model=projection_model, limit=0, skip=0)
@@ -52,27 +57,27 @@ class BaseTreeMongoRepository[T: BaseModel](BaseMongoRepository[T]):
                     return target.parent_id
 
                 msg = 'Type of "parent_id" must be "PyObjectId"'
-                raise ValueError(msg)
+                raise SaltBoxValidationException(msg)
 
             if hasattr(target, 'id'):
                 return await self.get_parent_id(PyObjectId(target.id))
 
             msg = 'Target must be have "id" field'
-            raise ValueError(msg)
+            raise SaltBoxValidationException(msg)
 
         elif isinstance(target, PyObjectId):
             query = {'_id': target}
             obj_data = await self.collection.find(filter=query, projection={'_id': 1, 'parent_id': 1}).to_list()
 
             if len(obj_data) == 0:
-                raise ObjectNotFoundError(obj_type=self.Meta.collection_name, query=query)
+                raise ObjectNotFoundException(obj_type=self.Meta.collection_name, query=query)
             elif len(obj_data) > 1:
-                raise MultipleObjectsFoundError
+                raise MultipleObjectsFoundException()
 
             return PyObjectId(obj_data[0]['parent_id']) if 'parent_id' in obj_data[0] else None
         else:
             msg = 'Unknown target type'  # type: ignore
-            raise TypeError(msg)
+            raise SaltBoxValidationException(msg)
 
     @overload
     async def get_parent(self, target: PyObjectId | ModelType) -> T | None: ...
@@ -95,7 +100,7 @@ class BaseTreeMongoRepository[T: BaseModel](BaseMongoRepository[T]):
                 return await self.get(parent_id, projection_model=projection_model)
             else:
                 return await self.get(parent_id)
-        except ObjectNotFoundError:
+        except ObjectNotFoundException:
             return None
 
     async def delete(self, query: PyObjectId | dict[str, Any]) -> int:
@@ -106,15 +111,15 @@ class BaseTreeMongoRepository[T: BaseModel](BaseMongoRepository[T]):
         find_result = await self.collection.find(filter=query, projection=projection).to_list()
 
         if len(find_result) == 0:
-            raise ObjectNotFoundError(obj_type=self.Meta.collection_name, query=query)
+            raise ObjectNotFoundException(obj_type=self.Meta.collection_name, query=query)
         elif len(find_result) > 1:
-            raise MultipleObjectsFoundError
+            raise MultipleObjectsFoundException()
 
         obj = BaseTreeModel.model_validate(find_result[0])
 
         if self.Meta.on_delete == OnDelete.protected:
             if self.exists({'parent_id': obj.id}):
-                raise ObjectDeleteError(detail='The object cannot be deleted because it has child elements')
+                raise ObjectDeleteException(detail='The object cannot be deleted because it has child elements')
         elif self.Meta.on_delete == OnDelete.cascade:
             for child in await self.get_children(obj, projection_model=BaseTreeModel):
                 deleted_count += await self.delete(child.id)

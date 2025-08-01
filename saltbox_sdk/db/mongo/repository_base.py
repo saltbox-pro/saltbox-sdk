@@ -10,15 +10,16 @@ from pymongo.errors import DuplicateKeyError as MongoDuplicateKeyError
 from pymongo.errors import OperationFailure
 
 from saltbox_sdk.db.abc_repository import AbstractRepository
-from saltbox_sdk.db.exceptions import (
-    DuplicateKeyError,
-    MultipleObjectsFoundError,
-    ObjectCreateError,
-    ObjectNotFoundError,
-    ObjectUpdateError,
-)
 from saltbox_sdk.db.mongo.schemas_base import PyObjectId
-from saltbox_sdk.fastapi_utils.http_errors import BadRequest
+from saltbox_sdk.exceptions import (
+    DuplicateKeyException,
+    MongoPipelineException,
+    MultipleObjectsFoundException,
+    ObjectCreateException,
+    ObjectNotFoundException,
+    ObjectUpdateException,
+    SaltBoxValidationException,
+)
 from saltbox_sdk.utilities.helpers import recursive_replace_dates
 
 ProjectionModel = TypeVar('ProjectionModel', bound=BaseModel)
@@ -100,20 +101,20 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
     def __validate(self) -> None:
         if 'id' not in self.default_model.model_fields:
             msg = 'Document class should have `id` field'
-            raise Exception(msg)
+            raise SaltBoxValidationException(msg)
         if not hasattr(self.Meta, 'collection_name') or not self.Meta.collection_name:
             msg = 'Meta should contain `collection_name`'
-            raise Exception(msg)
+            raise SaltBoxValidationException(msg)
         if hasattr(self.Meta, 'auto_now_add_fields') and self.Meta.auto_now_add_fields:
             for field in self.Meta.auto_now_add_fields:
                 if field not in self.default_model.model_fields:
                     msg = f'Meta `auto_now_add_fields` `{field}` should be in model fields'
-                    raise Exception(msg.format(field, self.Meta.collection_name))
+                    raise SaltBoxValidationException(msg.format(field, self.Meta.collection_name))
         if hasattr(self.Meta, 'auto_now_fields') and self.Meta.auto_now_fields:
             for field in self.Meta.auto_now_fields:
                 if field not in self.default_model.model_fields:
                     msg = f'Meta `auto_now_fields` `{field}` should be in model fields'
-                    raise Exception(msg.format(field, self.Meta.collection_name))
+                    raise SaltBoxValidationException(msg.format(field, self.Meta.collection_name))
 
     @staticmethod
     def _get_projection_from_model(model: type[ProjectionModel]) -> dict[str, Any]:
@@ -145,9 +146,9 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         result = await self.collection.find(filter=query, projection=projection).to_list()
 
         if len(result) == 0:
-            raise ObjectNotFoundError(obj_type=self.Meta.collection_name, query=query)
+            raise ObjectNotFoundException(obj_type=self.Meta.collection_name, query=query)
         elif len(result) > 1:
-            raise MultipleObjectsFoundError
+            raise MultipleObjectsFoundException()
 
         data = await self.prepare_object_data(result[0])
 
@@ -213,7 +214,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         try:
             data = await self.validate_object_data(data)
         except ValueError as e:
-            raise ObjectCreateError(str(e)) from e
+            raise ObjectCreateException(str(e)) from e
 
         if isinstance(data, BaseModel):
             data = data.model_dump(exclude={'id'})  # probably don't need to exclude id
@@ -228,10 +229,10 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         try:
             result = await self.collection.insert_one(data)
         except MongoDuplicateKeyError as e:
-            raise DuplicateKeyError from e
+            raise DuplicateKeyException() from e
 
         if not result.inserted_id:
-            raise ObjectCreateError
+            raise ObjectCreateException()
 
         if projection_model:
             return await self.get(PyObjectId(result.inserted_id), projection_model=projection_model)
@@ -266,7 +267,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         try:
             data = await self.validate_object_data(data)
         except ValueError as e:
-            raise ObjectCreateError(str(e)) from e
+            raise ObjectCreateException(str(e)) from e
         query = self.__prepare_query__(query)
 
         if isinstance(data, BaseModel):
@@ -278,7 +279,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
 
         result = await self.collection.update_one(query, {'$set': data}, upsert=False)
         if result.modified_count == 0:
-            raise ObjectUpdateError
+            raise ObjectUpdateException()
 
         if projection_model:
             return await self.get(query, projection_model=projection_model)
@@ -290,9 +291,9 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         count = await self.count(query)
 
         if count == 0:
-            raise ObjectNotFoundError(obj_type=self.Meta.collection_name, query=query)
+            raise ObjectNotFoundException(obj_type=self.Meta.collection_name, query=query)
         elif count > 1:
-            raise MultipleObjectsFoundError
+            raise MultipleObjectsFoundException()
 
         result = await self.collection.delete_one(query)
         return result.deleted_count
@@ -308,4 +309,4 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
             return await cursor.to_list()
         except OperationFailure as e:
             msg = f'Error during pipeline execution in aggregate: {e}'
-            raise BadRequest(detail=msg) from None
+            raise MongoPipelineException(msg) from None

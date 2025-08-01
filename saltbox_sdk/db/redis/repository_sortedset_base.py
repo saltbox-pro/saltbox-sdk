@@ -8,12 +8,14 @@ from redis.exceptions import ResponseError as RedisResponseError
 
 # from sa.saltbox_sdk import logger
 from saltbox_sdk.db.abc_repository import AbstractRepository
-from saltbox_sdk.db.exceptions import (
-    MultipleObjectsFoundError,
-    ObjectNotFoundError,
-    ObjectUpdateError,
-)
 from saltbox_sdk.db.redis.schemas_base import SortedSetId
+from saltbox_sdk.exceptions import (
+    MultipleObjectsFoundException,
+    ObjectNotFoundException,
+    ObjectUpdateException,
+    RepositoryException,
+    SaltBoxValidationException,
+)
 
 ProjectionModel = TypeVar('ProjectionModel', bound=BaseModel)
 ModelType = TypeVar('ModelType', bound=BaseModel)
@@ -36,20 +38,20 @@ class SortedsetRedisRepository[T: BaseModel](AbstractRepository[T]):
     def __validate(self) -> None:
         if self.Meta.id_field_name not in self.default_model.model_fields:
             msg = 'Document class should have `id` field'
-            raise Exception(msg)
+            raise SaltBoxValidationException(msg)
         if not hasattr(self.Meta, 'collection_name') or not self.Meta.collection_name:
             msg = 'Meta should contain `collection_name`'
-            raise Exception(msg)
+            raise SaltBoxValidationException(msg)
         if hasattr(self.Meta, 'auto_now_add_fields') and self.Meta.auto_now_add_fields:
             for field in self.Meta.auto_now_add_fields:
                 if field not in self.default_model.model_fields:
                     msg = f'Meta `auto_now_add_fields` `{field}` should be in model fields'
-                    raise Exception(msg.format(field, self.Meta.collection_name))
+                    raise SaltBoxValidationException(msg.format(field, self.Meta.collection_name))
         if hasattr(self.Meta, 'auto_now_fields') and self.Meta.auto_now_fields:
             for field in self.Meta.auto_now_fields:
                 if field not in self.default_model.model_fields:
                     msg = f'Meta `auto_now_fields` `{field}` should be in model fields'
-                    raise Exception(msg.format(field, self.Meta.collection_name))
+                    raise SaltBoxValidationException(msg.format(field, self.Meta.collection_name))
 
     @classmethod
     def __generate_id(cls) -> SortedSetId:
@@ -77,9 +79,9 @@ class SortedsetRedisRepository[T: BaseModel](AbstractRepository[T]):
             query = str(query)
 
         if len(result) == 0:
-            raise ObjectNotFoundError(obj_type=self.Meta.collection_name, query={'id': query})
+            raise ObjectNotFoundException(obj_type=self.Meta.collection_name, query={'id': query})
         elif len(result) > 1:
-            raise MultipleObjectsFoundError
+            raise MultipleObjectsFoundException()
 
         data = json.loads(result[0].decode())
         data['id'] = query
@@ -96,9 +98,9 @@ class SortedsetRedisRepository[T: BaseModel](AbstractRepository[T]):
             return await self._database.zscan(name=self.Meta.collection_name, cursor=cursor, match=match, count=count)
         except RedisResponseError as e:
             if 'invalid cursor' in str(e):
-                msg = f'Некорректное значение курсора: {cursor}'
-                raise ValueError(msg) from None
-            raise
+                msg = f'Invalid cursor: {cursor}'
+                raise SaltBoxValidationException(msg) from None
+            raise RepositoryException(str(e)) from None
 
     @overload
     async def get_list(self, start: int, end: int | None, limit: int | None, skip: int, desc: bool) -> list[T]: ...
@@ -235,7 +237,7 @@ class SortedsetRedisRepository[T: BaseModel](AbstractRepository[T]):
         )
 
         if updated_count != 1:
-            raise ObjectUpdateError
+            raise ObjectUpdateException()
 
         if projection_model:
             return await self.get(query, projection_model=projection_model)
