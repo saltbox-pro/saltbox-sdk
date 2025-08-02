@@ -19,15 +19,23 @@ from saltbox_sdk.discovery_client.schemas import (
     ServiceSchema,
 )
 
+ALLOWED_METHODS = {'GET', 'POST', 'PUT', 'DELETE', 'PATCH'}
+
 
 class DiscoveryClient:
     def __init__(
         self,
         openapi_schema: dict[str, Any],
+        docs_path: str | None = '/docs',
+        openapi_path: str | None = '/openapi.json',
+        healthcheck_path: str | None = '/discovery/health',
         httpx_client: httpx.AsyncClient | None = None,
     ):
         self._httpx_client = httpx_client or httpx.AsyncClient()
         self._openapi_schema = openapi_schema
+        self._docs_path = docs_path
+        self._openapi_path = openapi_path
+        self._healthcheck_path = healthcheck_path
 
     def __get_or_create_instance_id(self) -> str:
         file_path = (
@@ -48,24 +56,24 @@ class DiscoveryClient:
         endpoints = []
         for path, methods in self._openapi_schema.get('paths', {}).items():
             for method, details in methods.items():
-                if method.upper() in ['GET', 'POST', 'PUT', 'DELETE', 'PATCH']:
-                    endpoints.append(
-                        ServiceEndpoint(
-                            path=path,
-                            method=method.upper(),
-                            summary=details.get('summary', ''),
-                            description=details.get('description', ''),
-                            opa_config=OPAConfig(
-                                policy=details.get('x-opa-policy', 'public'),
-                                is_partial=details.get('x-opa-partial', False),
-                                partial_query=details.get('x-opa-partial-query', None),
-                                unknowns=details.get('x-opa-unknowns', None),
-                                query_filter_format=details.get('x-opa-query-filter-format', None),
-                            ),
-                            cache_ttl=details.get('x-cache-ttl', 0),
-                        )
+                if method.upper() not in ALLOWED_METHODS:
+                    continue
+                endpoints.append(
+                    ServiceEndpoint(
+                        path=path,
+                        method=method.upper(),
+                        summary=details.get('summary', ''),
+                        description=details.get('description', ''),
+                        opa_config=OPAConfig(
+                            policy=details.get('x-opa-policy', 'public'),
+                            is_partial=details.get('x-opa-partial', False),
+                            partial_query=details.get('x-opa-partial-query', None),
+                            unknowns=details.get('x-opa-unknowns', None),
+                            query_filter_format=details.get('x-opa-query-filter-format', None),
+                        ),
+                        cache_ttl=details.get('x-cache-ttl', 0),
                     )
-
+                )
         return endpoints
 
     async def _create_service_object(self) -> ServiceSchema:
@@ -79,8 +87,9 @@ class DiscoveryClient:
             port=DISCOVERY_SETTINGS.instance_port,
             base_route='',
             version=__version__,
-            health_check_path='/discovery/health',
-            auto_discover_routes=True,
+            healthcheck_path=self._healthcheck_path,
+            docs_path=self._docs_path,
+            openapi_path=self._openapi_path,
             enabled=True,
             endpoints=endpoints,
         )

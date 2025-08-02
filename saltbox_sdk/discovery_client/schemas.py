@@ -74,8 +74,9 @@ class ServiceInstance(BaseModel):
     base_route: str | None = None
     version: str | None = None
     endpoints: list[ServiceEndpoint] = []
-    health_check_path: str
-    auto_discover_routes: bool = False
+    healthcheck_path: str | None = None
+    docs_path: str | None = None
+    openapi_path: str | None = None
     enabled: bool = False
     healthy: bool | None = None
     last_check: float | None = None

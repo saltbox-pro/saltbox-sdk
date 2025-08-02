@@ -3,7 +3,6 @@ from typing import Any
 from fastapi.openapi.utils import get_openapi
 
 from saltbox_sdk.config.keycloak_config import KC_SETTINGS
-from saltbox_sdk.config.logger_config import logger
 
 
 def get_custom_openapi_schema(
@@ -23,8 +22,6 @@ def get_custom_openapi_schema(
     Returns:
         dict: Custom OpenAPI schema.
     """
-
-    logger.debug('KeycloakOIDC in get_custom_openapi_schema.')
     oauth2_scheme = {
         'type': 'oauth2',
         'flows': {
