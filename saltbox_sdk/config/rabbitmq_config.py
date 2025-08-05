@@ -10,7 +10,7 @@ class RabbitSettings(BaseSettings):
     host: str = 'rabbitmq'
     port: int = 5672
     user: str = 'guest'
-    password: str = 'guest'
+    password: str = 'guest'  # noqa: S105
 
     @property
     def url(self) -> str:

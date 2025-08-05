@@ -1,5 +1,3 @@
-import asyncio
-
 from faststream import FastStream
 from faststream.broker.types import BrokerMiddleware
 from faststream.rabbit import RabbitBroker
