@@ -70,6 +70,7 @@ class DiscoveryClient:
                             partial_query=details.get('x-opa-partial-query', None),
                             unknowns=details.get('x-opa-unknowns', None),
                             query_filter_format=details.get('x-opa-query-filter-format', None),
+                            action=details.get('x-opa-action', ''),
                         ),
                         cache_ttl=details.get('x-cache-ttl', 0),
                     )

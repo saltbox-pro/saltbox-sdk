@@ -30,20 +30,20 @@ class OPAConfig(BaseModel):
     """OPA configuration for service endpoints.
 
     Fields:
+        action: One of resource actions defined in resource model (e.g., 'read', 'write')
         policy: OPA policy package name (e.g., 'core.collections')
-        partial: Whether the Gateway should use partial evaluation for this endpoint
+        is_partial: Whether the Gateway should use partial evaluation for this endpoint
         partial_query: Policy statement for partial evaluation
         unknowns: List of unknowns to pass to OPA
         query_filter_format: Filter format returned by OPAClient
-        action: One of resource actions defined in resource model (e.g., 'read', 'write')
     """
 
+    action: str = Field(serialization_alias='x-opa-action')
     policy: str = Field(default='public', serialization_alias='x-opa-policy')
     is_partial: bool = Field(False, serialization_alias='x-opa-partial')
     partial_query: str | None = Field(None, serialization_alias='x-opa-partial-query')
     unknowns: list[str] | None = Field(None, serialization_alias='x-opa-unknowns')
     query_filter_format: OPAQueryFilterFormat | None = Field(None, serialization_alias='x-opa-query-filter-format')
-    action: str | None = Field(None, serialization_alias='x-opa-action')
 
     model_config = ConfigDict(extra='forbid', populate_by_name=True)
 
@@ -57,7 +57,7 @@ class ServiceEndpoint(BaseModel):
     method: str
     summary: str = ''
     description: str = ''
-    opa_config: OPAConfig = Field(default_factory=OPAConfig)
+    opa_config: OPAConfig
     cache_ttl: int = 0
 
 
