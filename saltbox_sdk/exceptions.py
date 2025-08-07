@@ -2,9 +2,17 @@ from saltbox_sdk.utilities import status
 
 
 class SaltBoxBaseException(Exception):
-    """Base class for all SaltBox errors."""
+    """
+    Base class for all SaltBox errors.
 
+    Attributes:
+        extra_fields tuple[str, ...]: Names of fields to add to error output.
+            Fields should exists and must be JSON serializable.
+    """
+
+    extra_fields: tuple[str, ...] = ()
     status_code: int = status.HTTP_500_INTERNAL_SERVER_ERROR
+    # TODO: (a.karmanov) :: `message` is a more common name
     detail: str = 'An unexpected error occurred in the SaltBox service.'
 
     def __init__(self, detail: str | Exception | None = None, status_code: int | None = None) -> None:
@@ -51,16 +59,16 @@ class RepositoryException(SaltBoxBaseException):
 class ObjectNotFoundException(RepositoryException):
     """Raised when an object is not found in the repository."""
 
+    extra_fields = ('obj_type', 'query')
     status_code: int = status.HTTP_404_NOT_FOUND
     detail: str = 'Object not found.'
 
     def __init__(self, detail: str | None = None, obj_type: str | None = None, query: dict | None = None) -> None:
+        self.obj_type = obj_type
+        self.query = query
+
         if detail:
             self.detail = detail
-        if obj_type:
-            self.detail += f' Type: {obj_type}.'
-        if query:
-            self.detail += f' Query: {query}.'
 
         super().__init__(self.detail)
 
