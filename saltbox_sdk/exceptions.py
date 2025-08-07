@@ -7,9 +7,9 @@ class SaltBoxBaseException(Exception):
     status_code: int = status.HTTP_500_INTERNAL_SERVER_ERROR
     detail: str = 'An unexpected error occurred in the SaltBox service.'
 
-    def __init__(self, detail: str | None = None, status_code: int | None = None) -> None:
+    def __init__(self, detail: str | Exception | None = None, status_code: int | None = None) -> None:
         if detail:
-            self.detail = detail
+            self.detail = str(detail)
         if status_code:
             self.status_code = status_code
         super().__init__(self.detail)
