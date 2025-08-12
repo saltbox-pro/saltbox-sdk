@@ -46,9 +46,10 @@ class MetricAggregator:
         except (TypeError, ValueError):
             request_length = 0
 
+        route = self._get_route_from_request(request=request)
         labels = {
                 'method': method,
-                'route': self._get_route_from_request(request=request),
+                'route': route,
                 'status_code': str(info.response.status_code),
         }
         self.request_total.labels(**labels).observe(request_length)
@@ -57,10 +58,10 @@ class MetricAggregator:
             self.ttfb.labels(**labels).observe(info.duration_to_first_byte)
 
     async def aggregate_exception(self, request: Request, ex: SaltBoxBaseException) -> None:
-        route = await self._get_route_from_request(request=request)
-        self.exceptions_total.labels(route=route, exception_type=ex.__str__).inc()
+        route = self._get_route_from_request(request=request)
+        self.exceptions_total.labels(route=route, exception_type=str(ex)).inc()
 
-    async def _get_route_from_request(self, request: Request) -> str:
+    def _get_route_from_request(self, request: Request) -> str:
         root_path: str = request.scope.get("root_path", "")
         route = request.scope.get("route")
         if route and getattr(route, "path_format", None):
