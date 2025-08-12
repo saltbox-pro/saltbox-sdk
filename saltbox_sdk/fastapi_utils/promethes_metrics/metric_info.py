@@ -9,4 +9,3 @@ class MetricInfo:
     request: Request
     response: Response
     duration: float
-    duration_to_first_byte: float | None

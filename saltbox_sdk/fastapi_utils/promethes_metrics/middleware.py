@@ -13,7 +13,6 @@ from saltbox_sdk.fastapi_utils.promethes_metrics.metric_info import MetricInfo
 
 
 class PrometheusExporterMiddleware:
-
     def __init__(
             self,
             app: ASGIApp,
@@ -30,7 +29,6 @@ class PrometheusExporterMiddleware:
            return await self.app(scope, receive, send)
 
         request_start_time = default_timer()
-        response_start_time = None
 
         status_code= 500
         headers = []
@@ -39,11 +37,10 @@ class PrometheusExporterMiddleware:
         request = Request(scope)
 
         async def send_wrapper(message: Message) -> None:
-            nonlocal headers, status_code, response_start_time, response_length
+            nonlocal headers, status_code, response_length
             if message['type'] == 'http.response.start':
                 headers = message['headers']
                 status_code = message['status']
-                response_start_time = default_timer()
             elif message['type'] == 'http.response.body' and message['body']:
                 response_length += len(message['body'])
             await send(message)
@@ -60,7 +57,6 @@ class PrometheusExporterMiddleware:
                 response_length=response_length,
                 headers=headers,
                 request_start_time=request_start_time,
-                response_start_time=response_start_time
             )
 
     async def _handle_response(
@@ -69,8 +65,7 @@ class PrometheusExporterMiddleware:
             status_code: int,
             response_length: float,
             headers: list,
-            request_start_time: float,
-            response_start_time: float | None
+            request_start_time: float
         ) -> None:
         end_time= default_timer()
 
@@ -85,12 +80,10 @@ class PrometheusExporterMiddleware:
                 status_code=status
                 )
         duration = end_time - request_start_time
-        duration_to_first_byte = (response_start_time - request_start_time) if response_start_time else None
         info = MetricInfo(
             request=request,
             response=response,
             duration=duration,
-            duration_to_first_byte=duration_to_first_byte
         )
         await self.aggregator.aggregate(info=info)
 
