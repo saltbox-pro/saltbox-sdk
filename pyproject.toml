@@ -9,6 +9,7 @@ dependencies = [
   "httpx~=0.27.0",
   "pydantic~=2.11.3",
   "pydantic-settings~=2.9.1",
+  "prometheus-client~=0.22.1"
 ]
 
 [tool.setuptools.dynamic]
@@ -163,3 +164,7 @@ show_error_codes = true
 warn_return_any = true
 warn_unreachable = true
 warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = ["prometheus_client.*"]
+ignore_missing_imports = true
