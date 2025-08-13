@@ -71,6 +71,7 @@ class DiscoveryClient:
                             unknowns=details.get('x-opa-unknowns', None),
                             query_filter_format=details.get('x-opa-query-filter-format', None),
                             action=details.get('x-opa-action', ''),
+                            include_object=details.get('x-opa-include-object', False),
                         ),
                         cache_ttl=details.get('x-cache-ttl', 0),
                     )
