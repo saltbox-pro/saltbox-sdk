@@ -7,7 +7,6 @@ from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from saltbox_sdk.exceptions import SaltBoxBaseException
 from saltbox_sdk.fastapi_utils.promethes_metrics.aggregator import MetricAggregator
 from saltbox_sdk.fastapi_utils.promethes_metrics.metric_info import MetricInfo
 
@@ -29,10 +28,8 @@ class PrometheusExporterMiddleware:
            return await self.app(scope, receive, send)
 
         request_start_time = default_timer()
-
         status_code= 500
         headers = []
-
         response_length = 0
         request = Request(scope)
 
@@ -47,9 +44,6 @@ class PrometheusExporterMiddleware:
 
         try:
             await self.app(scope, receive, send_wrapper)
-        except SaltBoxBaseException as ex:
-            await self.aggregator.aggregate_exception(request=request, ex=ex)
-            raise ex
         finally:
             await self._handle_response(
                 request=request,
@@ -74,16 +68,8 @@ class PrometheusExporterMiddleware:
         else:
             status = int(status_code)
 
-        response = Response(
-                content=str(response_length),
-                headers=Headers(raw=headers),
-                status_code=status
-                )
+        response = Response(content=str(response_length), headers=Headers(raw=headers), status_code=status)
         duration = end_time - request_start_time
-        info = MetricInfo(
-            request=request,
-            response=response,
-            duration=duration,
-        )
+        info = MetricInfo(request=request, response=response, duration=duration)
         await self.aggregator.aggregate(info=info)
 

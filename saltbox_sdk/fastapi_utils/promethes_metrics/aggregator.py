@@ -1,12 +1,10 @@
 from prometheus_client import CollectorRegistry, Counter, Histogram, Summary
 from starlette.requests import Request
 
-from saltbox_sdk.exceptions import SaltBoxBaseException
 from saltbox_sdk.fastapi_utils.promethes_metrics.metric_info import MetricInfo
 
 
 class MetricAggregator:
-
     def __init__(self, registry: CollectorRegistry) -> None:
         self.registry = registry
         self.request_total = Counter(
@@ -27,10 +25,10 @@ class MetricAggregator:
             buckets=[0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 30, 60],
             registry = registry
         )
-        self.exceptions_total = Counter(
-            name='http_exceptions_total',
-            documentation='Raised exceptions',
-            labelnames=['endpoint', 'exception_type'],
+        self.error_total = Counter(
+            name='http_error_total',
+            documentation='Total number of HTTP error responses',
+            labelnames=['endpoint', 'status_code'],
             registry=registry
         )
 
@@ -42,18 +40,17 @@ class MetricAggregator:
         except (TypeError, ValueError):
             request_length = 0
 
+        status = info.response.status_code
         route = self._get_route_from_request(request=request)
         labels = {
                 'endpoint': f'{request.method} {route}',
-                'status_code': str(info.response.status_code),
+                'status_code': str(status),
         }
+        if status >= 400:
+            self.error_total.labels(**labels).inc()
         self.request_total.inc()
         self.request_endpoint.labels(**labels).observe(request_length)
         self.request_duration.labels(**labels).observe(info.duration)
-
-    async def aggregate_exception(self, request: Request, ex: SaltBoxBaseException) -> None:
-        route = self._get_route_from_request(request=request)
-        self.exceptions_total.labels(endpoint=f'{request.method} {route}', exception_type=str(ex)).inc()
 
     def _get_route_from_request(self, request: Request) -> str:
         root_path: str = request.scope.get("root_path", "")
