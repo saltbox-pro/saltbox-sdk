@@ -40,7 +40,6 @@ class OPAConfig(BaseModel):
 
     action: str = Field(serialization_alias='x-opa-action')
     policy: str = Field(default='public', serialization_alias='x-opa-policy')
-    include_object: bool = Field(False, serialization_alias='x-opa-include-object')
     is_partial: bool = Field(False, serialization_alias='x-opa-partial')
     partial_query: str | None = Field(None, serialization_alias='x-opa-partial-query')
     unknowns: list[str] | None = Field(None, serialization_alias='x-opa-unknowns')
