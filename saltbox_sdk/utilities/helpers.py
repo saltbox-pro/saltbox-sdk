@@ -67,3 +67,45 @@ def recursive_replace_dates(obj: Any) -> Any:
         return datetime.strptime(obj, '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=UTC)
     else:
         return obj
+
+
+def match_query(obj: dict, query: dict) -> bool:  # noqa: C901
+    """Func for matching mongo-like query conditions against an object.
+    Example query:
+    {
+        '$and': [
+            {'field1': 'value1'},
+            {'field2': {'$gt': 10}},
+            {'field3': {'$in': ['value2', 'value3']}}
+        ]
+    }
+    e.g. for filtering Jobs from Redis in list endpoint
+    """
+
+    def match_condition(field: str, cond: Any) -> bool:
+        if isinstance(cond, dict):
+            for op, val in cond.items():
+                if op == '$in':
+                    if obj.get(field) not in val:
+                        return False
+                elif op == '$gt':
+                    if obj.get(field) <= val:
+                        return False
+                elif op == '$lt':
+                    if obj.get(field) >= val:
+                        return False
+                else:
+                    return False
+            return True
+        else:
+            return obj.get(field) == cond or obj.get(field) == str(cond)
+
+    if '$and' in query:
+        return all(match_query(obj, subq) for subq in query['$and'])
+    if '$or' in query:
+        return any(match_query(obj, subq) for subq in query['$or'])
+
+    for field, cond in query.items():
+        if not match_condition(field, cond):
+            return False
+    return True
