@@ -12,7 +12,7 @@ class RedisSettings(BaseSettings):
     redis_ca_cert: str | None = Field(None, description='Path to file of concatenated PEM certs')
     redis_password: str | None = None
     redis_tls_verification: Literal['none', 'optional', 'required'] = 'required'
-    redis_url: str = ''
+    redis_url: str = 'redis://localhost:6379/0'
     redis_username: str | None = None
 
     @property
