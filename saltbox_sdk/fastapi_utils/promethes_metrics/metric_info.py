@@ -9,3 +9,4 @@ class MetricInfo:
     request: Request
     response: Response
     duration: float
+
