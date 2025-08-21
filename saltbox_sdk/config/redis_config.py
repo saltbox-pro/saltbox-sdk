@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ENV_FILE = Path(os.environ.get('SALTBOX_ENV_FILE', '.env'))
 
@@ -14,6 +14,8 @@ class RedisSettings(BaseSettings):
     redis_tls_verification: Literal['none', 'optional', 'required'] = 'required'
     redis_url: str = 'redis://localhost:6379/0'
     redis_username: str | None = None
+
+    model_config = SettingsConfigDict(env_file=ENV_FILE, extra='ignore')
 
     @property
     def redis_connection_kwargs(self) -> dict[str, Any]:
