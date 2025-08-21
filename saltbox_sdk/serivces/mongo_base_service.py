@@ -8,6 +8,7 @@ from saltbox_sdk.db.schemas_base import PaginatedResponse
 from saltbox_sdk.serivces.abc_service import AbstractService
 
 ProjectionModel = TypeVar('ProjectionModel', bound=BaseModel)
+StubDefault: Any = None
 
 
 class MongoBaseService[
@@ -38,11 +39,11 @@ class MongoBaseService[
         return result
 
     @overload
-    async def get_list(self, query: Any, limit: int, skip: int) -> list[ModelType]: ...
+    async def get_list(self, query: Any, limit: int = 0, skip: int = 0) -> list[ModelType]: ...
 
     @overload
     async def get_list(
-        self, query: Any, limit: int, skip: int, projection_model: type[ProjectionModel]
+        self, query: Any, limit: int, skip: int, projection_model: type[ProjectionModel] = StubDefault
     ) -> list[ProjectionModel]: ...
 
     async def get_list(
