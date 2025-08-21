@@ -1,5 +1,4 @@
 from collections.abc import Callable
-from datetime import UTC, datetime
 from inspect import isclass
 from typing import Any, ClassVar, TypeVar, cast, overload
 
@@ -20,7 +19,7 @@ from saltbox_sdk.exceptions import (
     ObjectUpdateException,
     SaltBoxValidationException,
 )
-from saltbox_sdk.utilities.helpers import recursive_replace_dates
+from saltbox_sdk.utilities.helpers import recursive_replace_dates, utc_now
 
 ProjectionModel = TypeVar('ProjectionModel', bound=BaseModel)
 ModelType = TypeVar('ModelType', bound=BaseModel)
@@ -59,23 +58,23 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         query_overrides = self.__query_overrides__
 
         def recursive_override(data: dict[str, Any]) -> dict[str, Any]:
-            _query: dict[str, Any] = {}
+            query: dict[str, Any] = {}
 
             for data_key, data_value in data.items():
                 if data_key in query_overrides.keys():
                     override_key, override_value = query_overrides[data_key](data_key, data_value)
                     if override_value is not None:
-                        _query[override_key] = override_value
+                        query[override_key] = override_value
                 else:
                     if isinstance(data_value, dict):
-                        _query[data_key] = recursive_override(data_value)
+                        query[data_key] = recursive_override(data_value)
                     # TODO (i.moshkov): check if this is correct
                     elif isinstance(data_value, list) and data_key not in ['$in', '$nin']:
-                        _query[data_key] = [recursive_override(item_value) for item_value in data_value]
+                        query[data_key] = [recursive_override(item_value) for item_value in data_value]
                     else:
-                        _query[data_key] = data_value
+                        query[data_key] = data_value
 
-            return _query
+            return query
 
         if query_overrides:
             query = recursive_override(query)
@@ -219,12 +218,13 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         if isinstance(data, BaseModel):
             data = data.model_dump(exclude={'id'})  # probably don't need to exclude id
 
+        now = utc_now()
         if hasattr(self.Meta, 'auto_now_add_fields') and self.Meta.auto_now_add_fields:
             for field in self.Meta.auto_now_add_fields:
-                data[field] = datetime.now(UTC)
+                data[field] = now
         if hasattr(self.Meta, 'auto_now_fields') and self.Meta.auto_now_fields:
             for field in self.Meta.auto_now_fields:
-                data[field] = datetime.now(UTC)
+                data[field] = now
 
         try:
             result = await self.collection.insert_one(data)
@@ -274,11 +274,13 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
             data = data.model_dump(exclude={'id'}, exclude_unset=exclude_unset)
 
         if hasattr(self.Meta, 'auto_now_fields') and self.Meta.auto_now_fields:
+            now = utc_now()
             for field in self.Meta.auto_now_fields:
-                data[field] = datetime.now(UTC)
+                data[field] = now
         if not await self.exists(query):
             raise ObjectNotFoundException(obj_type=self.Meta.collection_name, query=query)
 
+        # TODO (a.karmanov): FIXME What if query matches multiple? May be UpdateMany is more appropriate?
         result = await self.collection.update_one(query, {'$set': data}, upsert=False)
         if result.modified_count == 0:
             raise ObjectUpdateException()
