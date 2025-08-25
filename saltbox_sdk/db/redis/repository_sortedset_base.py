@@ -32,7 +32,6 @@ class SortedsetRedisRepository[T: BaseModel](AbstractRepository[T]):
     def __init__(self, database: Redis):
         super().__init__()
         self._database: Redis = database
-        self.default_model: type[T] = self.__orig_bases__[0].__args__[0]  # type: ignore
         self.__validate()
 
     def __validate(self) -> None:
@@ -125,7 +124,7 @@ class SortedsetRedisRepository[T: BaseModel](AbstractRepository[T]):
         desc: bool = False,
         projection_model: type[ProjectionModel] | None = None,
     ) -> list[T] | list[ProjectionModel]:
-        _result = await self._database.zrange(
+        result_ = await self._database.zrange(
             name=self.Meta.collection_name,
             start=start,
             end=-1 if end is None else end,
@@ -136,7 +135,7 @@ class SortedsetRedisRepository[T: BaseModel](AbstractRepository[T]):
             byscore=True,
         )
 
-        result = [{'id': str(int(obj[1])), **json.loads(obj[0].decode())} for obj in _result]
+        result = [{'id': str(int(obj[1])), **json.loads(obj[0].decode())} for obj in result_]
 
         if projection_model:
             return [projection_model.model_validate(obj) for obj in result]

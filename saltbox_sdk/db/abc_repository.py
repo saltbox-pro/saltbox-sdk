@@ -1,10 +1,15 @@
 from abc import ABC, abstractmethod
-from typing import Any
+from functools import cached_property
+from typing import Any, cast
 
 from pydantic import BaseModel
 
 
 class AbstractRepository[T: BaseModel](ABC):
+    @cached_property
+    def default_model(self) -> type[T]:
+        return cast(type[T], self.__orig_bases__[0].__args__[0])  # type: ignore[attr-defined]
+
     @abstractmethod
     async def get(self, *args: Any, **kwargs: Any) -> T: ...
 

@@ -35,7 +35,6 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
     def __init__(self, database: AsyncDatabase):
         super().__init__()
         self.__database: AsyncDatabase = database
-        self.default_model: type[T] = self.__orig_bases__[0].__args__[0]  # type: ignore
         self.__validate()
 
     @property
