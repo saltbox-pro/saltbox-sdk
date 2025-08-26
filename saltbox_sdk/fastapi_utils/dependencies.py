@@ -5,11 +5,14 @@ from fastapi import Depends, Request
 from redis.asyncio import Redis
 
 from saltbox_sdk.config.logger_config import logger
+from saltbox_sdk.db.mongo import MongoAsyncDatabase
+from saltbox_sdk.db.mongo.config import get_mongo
 from saltbox_sdk.db.redis.config import get_redis
 from saltbox_sdk.db.schemas_base import UserShort
 from saltbox_sdk.exceptions import UserHeadersMissingException
 
 RedisDependency = Annotated[Redis, Depends(get_redis)]
+MongoDependency = Annotated[MongoAsyncDatabase, Depends(get_mongo)]
 
 
 async def get_current_user(request: Request) -> UserShort:

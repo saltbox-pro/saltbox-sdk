@@ -1,11 +1,11 @@
 from collections.abc import Generator
 
 from pymongo import AsyncMongoClient, MongoClient
-from pymongo.asynchronous.database import AsyncDatabase
 from pymongo.database import Database
 
 from saltbox_sdk.config.logger_config import logger
 from saltbox_sdk.config.mongo_config import MONGO_SETTINGS
+from saltbox_sdk.db.mongo import MongoAsyncDatabase, MongoSyncDatabase
 
 
 class _MongoClientSingleton:
@@ -19,7 +19,7 @@ class _MongoClientSingleton:
         return cls.instance
 
 
-def get_mongo_db(db_name: str = MONGO_SETTINGS.mongo_db) -> AsyncDatabase:
+def get_mongo_db(db_name: str = MONGO_SETTINGS.mongo_db) -> MongoAsyncDatabase:
     client = _MongoClientSingleton().mongo_client
 
     if client is None:
@@ -32,7 +32,7 @@ def get_mongo_db(db_name: str = MONGO_SETTINGS.mongo_db) -> AsyncDatabase:
 
 
 # TODO (a.baikov): Shuld we use generator
-def get_mongo() -> Generator[AsyncDatabase, None, None]:
+def get_mongo() -> Generator[MongoAsyncDatabase, None, None]:
     try:
         db = get_mongo_db()
         yield db
@@ -40,7 +40,7 @@ def get_mongo() -> Generator[AsyncDatabase, None, None]:
         pass
 
 
-def get_sync_mongo_db(db_name: str = MONGO_SETTINGS.mongo_db) -> Database:
+def get_sync_mongo_db(db_name: str = MONGO_SETTINGS.mongo_db) -> MongoSyncDatabase:
     client: MongoClient = MongoClient(MONGO_SETTINGS.mongo_url)
     db = client[db_name]
     return db

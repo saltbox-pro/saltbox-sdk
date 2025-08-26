@@ -4,11 +4,11 @@ from typing import Any, ClassVar, TypeVar, cast, overload
 
 from pydantic import BaseModel
 from pymongo.asynchronous.collection import AsyncCollection
-from pymongo.asynchronous.database import AsyncDatabase
 from pymongo.errors import DuplicateKeyError as MongoDuplicateKeyError
 from pymongo.errors import OperationFailure
 
 from saltbox_sdk.db.abc_repository import AbstractRepository
+from saltbox_sdk.db.mongo import MongoAsyncDatabase
 from saltbox_sdk.db.mongo.schemas_base import PyObjectId
 from saltbox_sdk.exceptions import (
     DuplicateKeyException,
@@ -32,9 +32,9 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         auto_now_fields: ClassVar[list[str]]
         query_overrides: ClassVar[dict[str, str]]
 
-    def __init__(self, database: AsyncDatabase):
+    def __init__(self, database: MongoAsyncDatabase):
         super().__init__()
-        self.__database: AsyncDatabase = database
+        self.__database: MongoAsyncDatabase = database
         self.__validate()
 
     @property
