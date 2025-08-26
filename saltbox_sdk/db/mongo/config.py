@@ -1,7 +1,6 @@
 from collections.abc import Generator
 
 from pymongo import AsyncMongoClient, MongoClient
-from pymongo.database import Database
 
 from saltbox_sdk.config.logger_config import logger
 from saltbox_sdk.config.mongo_config import MONGO_SETTINGS
