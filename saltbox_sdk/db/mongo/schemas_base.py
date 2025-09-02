@@ -92,6 +92,17 @@ MongoQuery = Annotated[dict[str, Any], AfterValidator(validate_mongo_query)]
 
 PipelineMongoQuery = Annotated[dict[str, Any], AfterValidator(validate_pipeline_query)]
 
+MongoQueryField: dict[str, Any] = Field(
+    default_factory=dict,
+    title='MongoDB Query',
+    description='A valid MongoDB query dictionary',
+    examples=[
+        {'some_field': 'Some value'},
+        {'some.with.path.field': 'Some other value'},
+    ],
+    json_schema_extra={'example': {'data_obj.data_field': {'$not': {'$regex': 'some value'}}}},
+)
+
 
 class PyObjectId(ObjectId):
     """
