@@ -51,10 +51,24 @@ class User(UserShort):
         return client_roles
 
 
-ANONYMOUS_USER = User(
-    sub='anonymous',
-    resource_access=None,
-    email_verified=False,
-    name='Anonymous',
-    email='anonymous@localhost',
-)
+ANONYMOUS_USER_DATA = {
+    'sub': 'anonymous',
+    'email_verified': False,
+    'name': 'Anonymous',
+    'email': 'anonymous@localhost',
+}
+
+
+SYSTEM_USER_DATA = {
+    'sub': 'system',
+    'email_verified': True,
+    'name': 'System',
+    'email': 'system@localhost',
+}
+
+
+ANONYMOUS_USER = User(**ANONYMOUS_USER_DATA, resource_access=None)
+ANONYMOUS_SHORT_USER = UserShort(**ANONYMOUS_USER_DATA)
+
+SYSTEM_USER = User(**SYSTEM_USER_DATA, resource_access=None)  # TODO: check `resource_access`
+SYSTEM_SHORT_USER = UserShort(**SYSTEM_USER_DATA)
