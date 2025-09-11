@@ -16,12 +16,18 @@ def get_faststream_broker(middlewares: list[BrokerMiddleware] | None = None) -> 
 def get_faststream_app(
     routers: list | None = None,
     lifespan: Lifespan | None = None,
+    broker: RabbitBroker | None = None,
     middlewares: list[BrokerMiddleware] | None = None,
 ) -> FastStream:
     if routers is None:
         routers = []
 
-    broker = get_faststream_broker(middlewares)
+    if broker is None:
+        broker = get_faststream_broker(middlewares)
+    else:
+        for middleware in middlewares or []:
+            if middleware not in broker._middlewares:
+                broker.add_middleware(middleware)
 
     for router in routers:
         broker.include_router(router)
