@@ -1,18 +1,23 @@
 from typing import Any
 
-from faststream.rabbit import RabbitBroker, RabbitMessage
+from faststream.rabbit import RabbitBroker, RabbitExchange, RabbitMessage
 
 from saltbox_sdk.event_bus.schemas import EventBusBaseMessage
 
 
-async def send_message(message: EventBusBaseMessage, queue: str = '', broker: RabbitBroker | None = None) -> None:
+async def send_message(
+    message: EventBusBaseMessage,
+    queue: str = '',
+    exchange: RabbitExchange | None = None,
+    broker: RabbitBroker | None = None,
+) -> None:
     if not broker:
         from saltbox_sdk.event_bus.faststream_app import get_faststream_broker
 
         broker = get_faststream_broker()
 
     async with broker as br:
-        await br.publish(message=message, queue=queue)
+        await br.publish(message=message, queue=queue, exchange=exchange)
 
 
 async def send_rpc_message(
