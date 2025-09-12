@@ -34,7 +34,7 @@ rest = [
   "fastapi~=0.115.4",
 ]
 mongo = [
-  "pymongo~=4.11",
+  "pymongo~=4.14.1",
 ]
 redis = [
   "redis~=5.2.0",
@@ -54,7 +54,7 @@ rest = [
   "fastapi~=0.115.4",
 ]
 mongo = [
-  "pymongo~=4.11",
+  "pymongo~=4.14.1",
 ]
 redis = [
   "redis~=5.2.0",
