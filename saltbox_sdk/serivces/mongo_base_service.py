@@ -39,20 +39,41 @@ class MongoBaseService[
         return result
 
     @overload
-    async def get_list(self, query: Any, limit: int = 0, skip: int = 0) -> list[ModelType]: ...
+    async def get_list(
+        self,
+        query: Any,
+        limit: int = 0,
+        skip: int = 0,
+        *,
+        sort: list[tuple[str, int | str | None]] | None = None,
+    ) -> list[ModelType]: ...
 
     @overload
     async def get_list(
-        self, query: Any, limit: int, skip: int, projection_model: type[ProjectionModel] = StubDefault
+        self,
+        query: Any,
+        limit: int,
+        skip: int,
+        projection_model: type[ProjectionModel] = StubDefault,
+        *,
+        sort: list[tuple[str, int | str | None]] | None = None,
     ) -> list[ProjectionModel]: ...
 
     async def get_list(
-        self, query: Any, limit: int = 0, skip: int = 0, projection_model: type[ProjectionModel] | None = None
+        self,
+        query: Any,
+        limit: int = 0,
+        skip: int = 0,
+        projection_model: type[ProjectionModel] | None = None,
+        *,
+        sort: list[tuple[str, int | str | None]] | None = None,
     ) -> list[ModelType] | list[ProjectionModel]:
         if projection_model:
-            return await self.repo.get_list(query=query, limit=limit, skip=skip, projection_model=projection_model)
+            return await self.repo.get_list(
+                query=query, sort=sort, limit=limit, skip=skip, projection_model=projection_model
+            )
 
-        return await self.repo.get_list(query=query, limit=limit, skip=skip)
+        return await self.repo.get_list(query=query, sort=sort, limit=limit, skip=skip)
 
     @overload
     async def create(self, data: CreateSchema) -> ModelType: ...
@@ -72,7 +93,12 @@ class MongoBaseService[
 
     @overload
     async def get_list_paginated(
-        self, query: dict[str, Any] | None, limit: int, skip: int
+        self,
+        query: dict[str, Any] | None,
+        limit: int,
+        skip: int,
+        *,
+        sort: list[tuple[str, int | str | None]] | None = None,
     ) -> PaginatedResponse[ModelType]: ...
 
     @overload
@@ -82,6 +108,8 @@ class MongoBaseService[
         limit: int,
         skip: int,
         projection_model: type[ProjectionModel],
+        *,
+        sort: list[tuple[str, int | str | None]] | None = None,
     ) -> PaginatedResponse[ProjectionModel]: ...
 
     async def get_list_paginated(
@@ -90,14 +118,16 @@ class MongoBaseService[
         limit: int = 0,
         skip: int = 0,
         projection_model: type[ProjectionModel] | None = None,
+        *,
+        sort: list[tuple[str, int | str | None]] | None = None,
     ) -> PaginatedResponse[ModelType] | PaginatedResponse[ProjectionModel]:
         total = await self.repo.count(query)
 
         if projection_model:
-            data = await self.repo.get_list(query, limit=limit, skip=skip, projection_model=projection_model)
+            data = await self.repo.get_list(query, sort=sort, limit=limit, skip=skip, projection_model=projection_model)
             return PaginatedResponse[ProjectionModel](total=total, data=data)
         else:
-            data = await self.repo.get_list(query, limit=limit, skip=skip)
+            data = await self.repo.get_list(query, sort=sort, limit=limit, skip=skip)
             return PaginatedResponse[ModelType](total=total, data=data)
 
     async def count(self, query: dict[str, Any] | None = None) -> int:

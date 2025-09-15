@@ -71,12 +71,13 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
                     elif isinstance(data_value, list) and data_key not in ['$in', '$nin']:
                         query[data_key] = [recursive_override(item_value) for item_value in data_value]
                     else:
-                        query[data_key] = data_value
-
+                        try:
+                            query['$or'] = [{data_key: data_value}, {data_key: PyObjectId(data_value)}]
+                        except Exception:
+                            query[data_key] = data_value
             return query
 
-        if query_overrides:
-            query = recursive_override(query)
+        query = recursive_override(query)
 
         return cast(dict[str, Any], recursive_replace_dates(query))
 
@@ -156,7 +157,14 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
             return self.default_model.model_validate(data)
 
     @overload
-    async def get_list(self, query: dict[str, Any] | None, limit: int, skip: int) -> list[T]: ...
+    async def get_list(
+        self,
+        query: dict[str, Any] | None,
+        limit: int,
+        skip: int,
+        *,
+        sort: list[tuple[str, int | str | None]] | None = None,
+    ) -> list[T]: ...
 
     @overload
     async def get_list(
@@ -165,6 +173,8 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         limit: int,
         skip: int,
         projection_model: type[ProjectionModel],
+        *,
+        sort: list[tuple[str, int | str | None]] | None = None,
     ) -> list[ProjectionModel]: ...
 
     async def get_list(
@@ -173,10 +183,12 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         limit: int = 0,
         skip: int = 0,
         projection_model: type[ProjectionModel] | None = None,
+        *,
+        sort: list[tuple[str, int | str | None]] | None = None,
     ) -> list[T] | list[ProjectionModel]:
         projection = self._get_projection_from_model(projection_model) if projection_model else None
         query = self.__prepare_query__(query)
-        result = self.collection.find(filter=query, projection=projection, limit=limit, skip=skip)
+        result = self.collection.find(filter=query, projection=projection, limit=limit, skip=skip, sort=sort)
 
         if projection_model:
             return [
