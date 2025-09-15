@@ -21,7 +21,11 @@ async def send_message(
 
 
 async def send_rpc_message(
-    message: EventBusBaseMessage, queue: str = '', response_timeout: float = 3.0, broker: RabbitBroker | None = None
+    message: EventBusBaseMessage,
+    queue: str = '',
+    exchange: RabbitExchange | None = None,
+    response_timeout: float = 3.0,
+    broker: RabbitBroker | None = None,
 ) -> Any:
     if not broker:
         from saltbox_sdk.event_bus.faststream_app import get_faststream_broker
@@ -32,6 +36,7 @@ async def send_rpc_message(
         response: RabbitMessage = await br.request(
             message,
             queue=queue,
+            exchange=exchange,
             timeout=response_timeout,
         )
         return await response.decode()
