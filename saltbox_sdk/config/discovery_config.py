@@ -1,6 +1,8 @@
 import os
 from pathlib import Path
+from uuid import uuid4
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ENV_FILE = Path(os.environ.get('SALTBOX_ENV_FILE', '.env'))
@@ -16,6 +18,7 @@ class DiscoverySettings(BaseSettings):
     service_description: str
     service_vendor: str
     service_type: str
+    instance_id: str = Field(default_factory=lambda: uuid4().hex)
     instance_host: str
     instance_port: int
     front_container_name: str

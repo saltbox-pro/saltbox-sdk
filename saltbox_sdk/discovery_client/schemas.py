@@ -89,6 +89,7 @@ class ServiceFrontendEnv(BaseModel):
 
 
 class ServiceFrontendConfig(BaseModel):
+    service_name: str | None = None
     url: str
     static_host: str | None = None
     env: ServiceFrontendEnv | None = None

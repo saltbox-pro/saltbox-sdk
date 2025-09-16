@@ -37,6 +37,7 @@ class DiscoveryClient:
         self._openapi_path = openapi_path
         self._healthcheck_path = healthcheck_path
 
+    # TODO: temporary disabled to use instance_id from env variable
     def __get_or_create_instance_id(self) -> str:
         file_path = (
             Path(__file__).parent.parent
@@ -82,8 +83,9 @@ class DiscoveryClient:
         endpoints = await self._get_endpoints_from_openapi()
 
         instance = ServiceInstance(
-            id=self.__get_or_create_instance_id(),
-            # host=DISCOVERY_CONFIG.instance_host,
+            # id=self.__get_or_create_instance_id(),
+            # host=DISCOVERY_SETTINGS.instance_host,
+            id=DISCOVERY_SETTINGS.instance_id,
             host=socket.gethostname(),
             port=DISCOVERY_SETTINGS.instance_port,
             base_route='',
@@ -96,6 +98,7 @@ class DiscoveryClient:
         )
 
         front_config = ServiceFrontendConfig(
+            service_name=DISCOVERY_SETTINGS.service_name,
             url=f'{DISCOVERY_SETTINGS.server_scheme}://{DISCOVERY_SETTINGS.server_outer_socket.strip("/")}/static/{DISCOVERY_SETTINGS.service_name}',
             static_host=f'http://{DISCOVERY_SETTINGS.front_container_name}:{DISCOVERY_SETTINGS.front_container_port}',
             env=ServiceFrontendEnv(
