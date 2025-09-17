@@ -14,7 +14,7 @@ from saltbox_sdk.scheduler.messages import (
 )
 
 
-async def sync_scheduler_templates(templates_path: Path, default_target: str) -> None:
+async def sync_scheduler_templates(templates_path: Path, service_name: str) -> None:
     templates: list[dict[str, Any]] = []
 
     logger.debug(f'Syncing scheduler templates from {templates_path}')
@@ -32,8 +32,9 @@ async def sync_scheduler_templates(templates_path: Path, default_target: str) ->
         await send_message(
             message=SyncTemplatesResponseEventBusMessage.model_validate(
                 {
+                    'sender': service_name,
                     'target': 'scheduler',
-                    'task_target': template.get('target', default_target),
+                    'task_target': template.get('target', service_name),
                     'fun': template['fun'],
                     'name': template['name'],
                     'json_schema': template.get('json_schema', {}),

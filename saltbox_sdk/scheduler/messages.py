@@ -18,6 +18,7 @@ class SyncTemplatesResponseEventBusMessage(EventBusBaseMessage):
 
 
 class RunTaskEventBusMessage(EventBusBaseMessage):
+    task_id: str
     process_id: str
     fun: str
     data: dict = Field(title='Data', default_factory=dict)
