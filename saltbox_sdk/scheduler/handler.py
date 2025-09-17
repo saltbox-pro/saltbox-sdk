@@ -61,6 +61,7 @@ async def run_scheduled_task(message: RunTaskEventBusMessage, context: ContextRe
         result_data = {'error': f'Unknown function `{message.fun}`'}
 
     result_message = RunTaskResultEventBusMessage(
+        sender=context.get('service_name'),
         target='scheduler',
         process_id=message.process_id,
         status=result_status,
