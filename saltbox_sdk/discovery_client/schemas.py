@@ -40,16 +40,18 @@ class OPAConfig(BaseModel):
 
     action: str = Field(serialization_alias='x-opa-action')
     policy: str = Field(default='public', serialization_alias='x-opa-policy')
-    is_partial: bool = Field(False, serialization_alias='x-opa-partial')
-    partial_query: str | None = Field(None, serialization_alias='x-opa-partial-query')
-    unknowns: list[str] | None = Field(None, serialization_alias='x-opa-unknowns')
-    query_filter_format: OPAQueryFilterFormat | None = Field(None, serialization_alias='x-opa-query-filter-format')
+    is_partial: bool = Field(serialization_alias='x-opa-partial', default=False)
+    partial_query: str | None = Field(serialization_alias='x-opa-partial-query', default=None)
+    unknowns: list[str] | None = Field(serialization_alias='x-opa-unknowns', default=None)
+    query_filter_format: OPAQueryFilterFormat | None = Field(
+        serialization_alias='x-opa-query-filter-format', default=None
+    )
 
     model_config = ConfigDict(extra='forbid', populate_by_name=True)
 
 
 class GatewayEndpointConfig(OPAConfig):
-    cache_ttl: int | None = Field(0, serialization_alias='x-cache-ttl')
+    cache_ttl: int | None = Field(serialization_alias='x-cache-ttl', default=0)
 
 
 class ServiceEndpoint(BaseModel):
