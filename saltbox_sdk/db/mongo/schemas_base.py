@@ -1,3 +1,4 @@
+from enum import IntEnum
 from typing import Annotated, Any
 
 import pydantic
@@ -173,3 +174,8 @@ class TreeMixin:
 
 
 class BaseTreeModel(pydantic.BaseModel, IDMixin, TreeMixin): ...
+
+
+class SortOrder(IntEnum):
+    ASC = 1
+    DESC = -1

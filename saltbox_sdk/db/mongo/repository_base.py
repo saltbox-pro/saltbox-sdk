@@ -9,7 +9,7 @@ from pymongo.errors import OperationFailure
 
 from saltbox_sdk.db.abc_repository import AbstractRepository
 from saltbox_sdk.db.mongo import MongoAsyncDatabase
-from saltbox_sdk.db.mongo.schemas_base import PyObjectId
+from saltbox_sdk.db.mongo.schemas_base import PyObjectId, SortOrder
 from saltbox_sdk.exceptions import (
     DuplicateKeyException,
     MongoPipelineException,
@@ -163,7 +163,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         limit: int,
         skip: int,
         *,
-        sort: list[tuple[str, int | str | None]] | None = None,
+        sort: dict[str, SortOrder] | None = None,
     ) -> list[T]: ...
 
     @overload
@@ -174,7 +174,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         skip: int,
         projection_model: type[ProjectionModel],
         *,
-        sort: list[tuple[str, int | str | None]] | None = None,
+        sort: dict[str, SortOrder] | None = None,
     ) -> list[ProjectionModel]: ...
 
     async def get_list(
@@ -184,11 +184,12 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         skip: int = 0,
         projection_model: type[ProjectionModel] | None = None,
         *,
-        sort: list[tuple[str, int | str | None]] | None = None,
+        sort: dict[str, SortOrder] | None = None,
     ) -> list[T] | list[ProjectionModel]:
         projection = self._get_projection_from_model(projection_model) if projection_model else None
         query = self.__prepare_query__(query)
-        result = self.collection.find(filter=query, projection=projection, limit=limit, skip=skip, sort=sort)
+        mongo_sort = [(field, order.value) for field, order in sort.items()] if sort else None
+        result = self.collection.find(filter=query, projection=projection, limit=limit, skip=skip, sort=mongo_sort)
 
         if projection_model:
             return [

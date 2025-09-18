@@ -3,7 +3,7 @@ from typing import Any, TypeVar, overload
 from pydantic import BaseModel
 
 from saltbox_sdk.db.mongo.repository_base import BaseMongoRepository
-from saltbox_sdk.db.mongo.schemas_base import PyObjectId
+from saltbox_sdk.db.mongo.schemas_base import PyObjectId, SortOrder
 from saltbox_sdk.db.schemas_base import PaginatedResponse
 from saltbox_sdk.serivces.abc_service import AbstractService
 
@@ -45,7 +45,7 @@ class MongoBaseService[
         limit: int = 0,
         skip: int = 0,
         *,
-        sort: list[tuple[str, int | str | None]] | None = None,
+        sort: dict[str, SortOrder] | None = None,
     ) -> list[ModelType]: ...
 
     @overload
@@ -56,7 +56,7 @@ class MongoBaseService[
         skip: int,
         projection_model: type[ProjectionModel] = StubDefault,
         *,
-        sort: list[tuple[str, int | str | None]] | None = None,
+        sort: dict[str, SortOrder] | None = None,
     ) -> list[ProjectionModel]: ...
 
     async def get_list(
@@ -66,7 +66,7 @@ class MongoBaseService[
         skip: int = 0,
         projection_model: type[ProjectionModel] | None = None,
         *,
-        sort: list[tuple[str, int | str | None]] | None = None,
+        sort: dict[str, SortOrder] | None = None,
     ) -> list[ModelType] | list[ProjectionModel]:
         if projection_model:
             return await self.repo.get_list(
@@ -98,7 +98,7 @@ class MongoBaseService[
         limit: int,
         skip: int,
         *,
-        sort: list[tuple[str, int | str | None]] | None = None,
+        sort: dict[str, SortOrder] | None = None,
     ) -> PaginatedResponse[ModelType]: ...
 
     @overload
@@ -109,7 +109,7 @@ class MongoBaseService[
         skip: int,
         projection_model: type[ProjectionModel],
         *,
-        sort: list[tuple[str, int | str | None]] | None = None,
+        sort: dict[str, SortOrder] | None = None,
     ) -> PaginatedResponse[ProjectionModel]: ...
 
     async def get_list_paginated(
@@ -119,7 +119,7 @@ class MongoBaseService[
         skip: int = 0,
         projection_model: type[ProjectionModel] | None = None,
         *,
-        sort: list[tuple[str, int | str | None]] | None = None,
+        sort: dict[str, SortOrder] | None = None,
     ) -> PaginatedResponse[ModelType] | PaginatedResponse[ProjectionModel]:
         total = await self.repo.count(query)
 
