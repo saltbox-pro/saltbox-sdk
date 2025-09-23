@@ -86,6 +86,16 @@ class DuplicateKeyException(RepositoryException):
     status_code: int = status.HTTP_400_BAD_REQUEST
     detail: str = 'Duplicate key error.'
 
+    def __init__(self, detail: str | None = None, key_value: dict | None = None) -> None:
+        if detail:
+            self.detail = detail
+        if key_value:
+            self.detail += ' Unique constraint failed for: ('
+            for key, value in key_value.items():
+                self.detail += f'{key}={value}, '
+            self.detail = self.detail.rstrip(', ') + ')'
+        super().__init__(self.detail)
+
 
 class ObjectCreateException(RepositoryException):
     """Raised when an object cannot be created in the repository."""

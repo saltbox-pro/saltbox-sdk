@@ -7,6 +7,7 @@ from pymongo.asynchronous.collection import AsyncCollection
 from pymongo.errors import DuplicateKeyError as MongoDuplicateKeyError
 from pymongo.errors import OperationFailure
 
+from saltbox_sdk.config.logger_config import logger
 from saltbox_sdk.db.abc_repository import AbstractRepository
 from saltbox_sdk.db.mongo import MongoAsyncDatabase
 from saltbox_sdk.db.mongo.schemas_base import PyObjectId, SortOrder
@@ -217,7 +218,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         self, data: ModelType | dict[str, Any], projection_model: type[ProjectionModel]
     ) -> ProjectionModel: ...
 
-    async def create(
+    async def create(  # noqa: C901
         self,
         data: ModelType | dict[str, Any],
         projection_model: type[ProjectionModel] | None = None,
@@ -241,6 +242,9 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         try:
             result = await self.collection.insert_one(data)
         except MongoDuplicateKeyError as e:
+            logger.debug(f'{type(e.details)}')
+            if e.details and 'keyValue' in e.details:
+                raise DuplicateKeyException(key_value=e.details['keyValue']) from None
             raise DuplicateKeyException(str(e)) from None
 
         if not result.inserted_id:
