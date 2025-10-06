@@ -1,6 +1,9 @@
 from typing import Any
 
-from bson import ObjectId
+try:
+    from bson import ObjectId
+except ModuleNotFoundError:
+    ObjectId = None  # type: ignore[assignment, misc]
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
@@ -9,6 +12,8 @@ from saltbox_sdk.exceptions import SaltBoxBaseException
 
 
 def convert_objectids(obj: Any) -> Any:
+    if ObjectId is None:
+        return obj  # type: ignore[unreachable]
     if isinstance(obj, ObjectId):
         return str(obj)
     if isinstance(obj, dict):
