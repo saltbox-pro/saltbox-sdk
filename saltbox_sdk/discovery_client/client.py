@@ -81,7 +81,7 @@ class DiscoveryClient:
     async def _create_service_object(self) -> ServiceSchema:
         """Creates a service object from the configuration."""
         endpoints = await self._get_endpoints_from_openapi()
-        host = DISCOVERY_SETTINGS.server_outer_socket if DISCOVERY_SETTINGS.is_external else socket.gethostname()
+        host = DISCOVERY_SETTINGS.instance_host if DISCOVERY_SETTINGS.is_external else socket.gethostname()
 
         instance = ServiceInstance(
             # id=self.__get_or_create_instance_id(),
