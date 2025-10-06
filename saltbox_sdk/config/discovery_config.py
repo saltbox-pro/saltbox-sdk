@@ -18,6 +18,7 @@ class DiscoverySettings(BaseSettings):
     service_description: str
     service_vendor: str
     service_type: str
+    is_external: bool = False
     instance_id: str = Field(default_factory=lambda: uuid4().hex)
     instance_host: str
     instance_port: int
