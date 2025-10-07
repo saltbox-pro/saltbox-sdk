@@ -8,7 +8,7 @@ def sortedset_id_validate(value: str) -> str:
     return value
 
 
-SortedSetId = Annotated[str, AfterValidator(sortedset_id_validate)]
+SortedSetId = Annotated[str | int | float, AfterValidator(sortedset_id_validate)]
 
 
 class IDMixin:

@@ -53,7 +53,7 @@ class SortedsetRedisRepository[T: BaseModel](AbstractRepository[T]):
                     raise SaltBoxValidationException(msg.format(field, self.Meta.collection_name))
 
     @classmethod
-    def __generate_id(cls) -> SortedSetId:
+    def _generate_id(cls, data: T | dict[str, Any]) -> SortedSetId:
         return datetime.now(UTC).strftime('%Y%m%d%H%M%S%f')
 
     @overload
@@ -67,15 +67,15 @@ class SortedsetRedisRepository[T: BaseModel](AbstractRepository[T]):
     async def get(
         self, query: SortedSetId | int | float, projection_model: type[ProjectionModel] | None = None
     ) -> ProjectionModel | T:
-        result = await self._database.zrange(
-            name=self.Meta.collection_name,
-            start=int(query),
-            end=int(query),
-            byscore=True,
-        )
-
         if type(query) in [int, float]:
             query = str(query)
+
+        result = await self._database.zrange(
+            name=self.Meta.collection_name,
+            start=query,  # type: ignore
+            end=query,  # type: ignore
+            byscore=True,
+        )
 
         if len(result) == 0:
             raise ObjectNotFoundException(obj_type=self.Meta.collection_name, query={'id': query})
@@ -176,7 +176,7 @@ class SortedsetRedisRepository[T: BaseModel](AbstractRepository[T]):
             if 'id' in data.keys():
                 del data['id']
 
-        obj_id: SortedSetId = self.__generate_id()
+        obj_id: SortedSetId = self._generate_id(data=data)
 
         if hasattr(self.Meta, 'auto_now_add_fields') and self.Meta.auto_now_add_fields:
             for field in self.Meta.auto_now_add_fields:
@@ -187,7 +187,7 @@ class SortedsetRedisRepository[T: BaseModel](AbstractRepository[T]):
 
         await self._database.zadd(
             name=self.Meta.collection_name,
-            mapping={json.dumps(data): int(obj_id)},
+            mapping={json.dumps(data): obj_id},
         )
 
         if projection_model:
