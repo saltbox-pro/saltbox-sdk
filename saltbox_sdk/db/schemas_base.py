@@ -9,6 +9,11 @@ class CreatedModifiedMixin:
     modified: TimezoneAwareDatetime = Field(title='Modified')
 
 
+class Source(BaseModel):
+    type: str = Field(title='Source type')
+    id: str | None = Field(title='Source id', default=None)
+
+
 class PaginatedResponse[SchemaType: BaseModel](BaseModel):
     total: int = Field(description='Total number of items', ge=0)
     data: list[SchemaType] = Field(description='Items list')
