@@ -31,7 +31,12 @@ class DiscoveryClient:
         healthcheck_path: str | None = '/discovery/health',
         httpx_client: httpx.AsyncClient | None = None,
     ):
-        self._httpx_client = httpx_client or httpx.AsyncClient()
+        if httpx_client is None:
+            self._httpx_client = httpx.AsyncClient()
+            self._is_httpx_client_temporary = True
+        else:
+            self._httpx_client = httpx_client
+            self._is_httpx_client_temporary = False
         self._openapi_schema = openapi_schema
         self._docs_path = docs_path
         self._openapi_path = openapi_path
@@ -147,6 +152,9 @@ class DiscoveryClient:
             except Exception as e:
                 logger.error(f'Error during service registration: {e}')
                 await asyncio.sleep(5)
+            finally:
+                if self._is_httpx_client_temporary:
+                    await self._httpx_client.aclose()
 
     async def check_discovery_service(self) -> bool:
         """Проверяет доступность сервиса Discovery"""
