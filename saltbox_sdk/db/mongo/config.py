@@ -1,10 +1,11 @@
 from collections.abc import Generator
 
 from pymongo import AsyncMongoClient, MongoClient
+from pymongo.asynchronous.database import AsyncDatabase as MongoAsyncDatabase
+from pymongo.database import Database as MongoSyncDatabase
 
 from saltbox_sdk.config.logger_config import logger
 from saltbox_sdk.config.mongo_config import MONGO_SETTINGS
-from saltbox_sdk.db.mongo import MongoAsyncDatabase, MongoSyncDatabase
 
 
 class _MongoClientSingleton:

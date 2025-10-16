@@ -4,12 +4,12 @@ from typing import Any, ClassVar, TypeVar, cast, overload
 
 from pydantic import BaseModel
 from pymongo.asynchronous.collection import AsyncCollection
+from pymongo.asynchronous.database import AsyncDatabase as MongoAsyncDatabase
 from pymongo.errors import DuplicateKeyError as MongoDuplicateKeyError
 from pymongo.errors import OperationFailure
 
 from saltbox_sdk.config.logger_config import logger
 from saltbox_sdk.db.abc_repository import AbstractRepository
-from saltbox_sdk.db.mongo import MongoAsyncDatabase
 from saltbox_sdk.db.mongo.schemas_base import PyObjectId, SortOrder
 from saltbox_sdk.exceptions import (
     DuplicateKeyException,
