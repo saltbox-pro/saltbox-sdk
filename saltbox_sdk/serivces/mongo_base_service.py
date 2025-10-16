@@ -22,11 +22,11 @@ class MongoBaseService[
 
     @overload
     async def get(
-        self, query: dict[str, Any] | PyObjectId, projection_model: type[ProjectionModel]
+        self, query: dict[str, Any] | PyObjectId, *, projection_model: type[ProjectionModel]
     ) -> ProjectionModel: ...
 
     async def get(
-        self, query: dict[str, Any] | PyObjectId, projection_model: type[ProjectionModel] | None = None
+        self, query: dict[str, Any] | PyObjectId, *, projection_model: type[ProjectionModel] | None = None
     ) -> ModelType | ProjectionModel:
         if isinstance(query, PyObjectId):
             query = {'_id': query}
@@ -54,8 +54,8 @@ class MongoBaseService[
         query: Any,
         limit: int,
         skip: int,
-        projection_model: type[ProjectionModel] = StubDefault,
         *,
+        projection_model: type[ProjectionModel] = StubDefault,
         sort: dict[str, SortOrder] | None = None,
     ) -> list[ProjectionModel]: ...
 
@@ -64,8 +64,8 @@ class MongoBaseService[
         query: Any,
         limit: int = 0,
         skip: int = 0,
-        projection_model: type[ProjectionModel] | None = None,
         *,
+        projection_model: type[ProjectionModel] | None = None,
         sort: dict[str, SortOrder] | None = None,
     ) -> list[ModelType] | list[ProjectionModel]:
         if projection_model:
@@ -79,10 +79,10 @@ class MongoBaseService[
     async def create(self, data: CreateSchema) -> ModelType: ...
 
     @overload
-    async def create(self, data: CreateSchema, projection_model: type[ProjectionModel]) -> ProjectionModel: ...
+    async def create(self, data: CreateSchema, *, projection_model: type[ProjectionModel]) -> ProjectionModel: ...
 
     async def create(
-        self, data: CreateSchema, projection_model: type[ProjectionModel] | None = None
+        self, data: CreateSchema, *, projection_model: type[ProjectionModel] | None = None
     ) -> ModelType | ProjectionModel:
         if projection_model:
             result = await self.repo.create(data, projection_model=projection_model)
@@ -107,8 +107,8 @@ class MongoBaseService[
         query: dict[str, Any] | None,
         limit: int,
         skip: int,
-        projection_model: type[ProjectionModel],
         *,
+        projection_model: type[ProjectionModel],
         sort: dict[str, SortOrder] | None = None,
     ) -> PaginatedResponse[ProjectionModel]: ...
 
@@ -117,8 +117,8 @@ class MongoBaseService[
         query: dict[str, Any] | None = None,
         limit: int = 0,
         skip: int = 0,
-        projection_model: type[ProjectionModel] | None = None,
         *,
+        projection_model: type[ProjectionModel] | None = None,
         sort: dict[str, SortOrder] | None = None,
     ) -> PaginatedResponse[ModelType] | PaginatedResponse[ProjectionModel]:
         total = await self.repo.count(query)

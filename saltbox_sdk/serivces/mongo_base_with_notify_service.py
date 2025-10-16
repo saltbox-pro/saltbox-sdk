@@ -1,5 +1,5 @@
 import json
-from typing import Any, overload
+from typing import Any, overload, override
 
 from pydantic import BaseModel
 from redis.asyncio import Redis
@@ -30,7 +30,7 @@ class MongoBaseWithNotifyService[
     async def create(
         self,
         data: CreateSchema,
-        projection_model: None = None,
+        *,
         notify: bool = True,
     ) -> ModelType: ...
 
@@ -38,15 +38,18 @@ class MongoBaseWithNotifyService[
     async def create(
         self,
         data: CreateSchema,
+        *,
         projection_model: type[ProjectionModel],
         notify: bool = True,
     ) -> ProjectionModel: ...
 
+    @override
     async def create(
         self,
         data: CreateSchema,
+        *,
         projection_model: type[ProjectionModel] | None = None,
-        notify: bool | None = None,
+        notify: bool = True,
     ) -> ModelType | ProjectionModel:
         obj: ModelType | ProjectionModel
 
@@ -66,6 +69,7 @@ class MongoBaseWithNotifyService[
         query: dict[str, Any] | PyObjectId,
         data: UpdateSchema | dict[str, Any],
         exclude_unset: bool = True,
+        *,
         notify: bool = True,
     ) -> ModelType: ...
 
@@ -75,19 +79,20 @@ class MongoBaseWithNotifyService[
         query: dict[str, Any] | PyObjectId,
         data: UpdateSchema | dict[str, Any],
         exclude_unset: bool = True,
-        notify: bool = True,
         *,
         projection_model: type[ProjectionModel],
+        notify: bool = True,
     ) -> ProjectionModel: ...
 
+    @override
     async def update(
         self,
         query: dict[str, Any] | PyObjectId,
         data: UpdateSchema | dict[str, Any],
         exclude_unset: bool = True,
-        notify: bool = True,
         *,
         projection_model: type[ProjectionModel] | None = None,
+        notify: bool = True,
     ) -> ModelType | ProjectionModel:
         obj: ModelType | ProjectionModel
 
@@ -107,24 +112,26 @@ class MongoBaseWithNotifyService[
     async def delete(self, query: dict[str, Any] | PyObjectId) -> int: ...
 
     @overload
-    async def delete(self, query: dict[str, Any] | PyObjectId, notify: bool = True) -> int: ...
+    async def delete(self, query: dict[str, Any] | PyObjectId, *, notify: bool = True) -> int: ...
 
-    async def delete(self, query: dict[str, Any] | PyObjectId, notify: bool | None = None) -> int:
+    @override
+    async def delete(self, query: dict[str, Any] | PyObjectId, *, notify: bool = True) -> int:
         obj = await self.get(query=query)
         deleted_count = await super().delete(query=query)
 
-        if isinstance(notify, bool) and notify:
+        if notify:
             await self._notify(obj=obj, action='delete')
 
         return deleted_count
 
     @overload
-    async def delete_mane(self, query: dict[str, Any] | PyObjectId) -> int: ...
+    async def delete_many(self, query: dict[str, Any] | PyObjectId) -> int: ...
 
     @overload
-    async def delete_mane(self, query: dict[str, Any] | PyObjectId, notify: bool = True) -> int: ...
+    async def delete_many(self, query: dict[str, Any] | PyObjectId, *, notify: bool = True) -> int: ...
 
-    async def delete_mane(self, query: dict[str, Any] | PyObjectId, notify: bool | None = None) -> int:
+    @override
+    async def delete_many(self, query: dict[str, Any] | PyObjectId, *, notify: bool = True) -> int:
         objs = await self.get_list(query=query)
         deleted_count = await super().delete(query=query)
 
