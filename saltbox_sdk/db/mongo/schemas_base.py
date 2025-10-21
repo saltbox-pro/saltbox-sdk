@@ -4,12 +4,7 @@ from typing import Annotated, Any
 import pydantic
 from bson.errors import InvalidId
 from bson.objectid import ObjectId
-from pydantic import (
-    AfterValidator,
-    Field,
-    GetCoreSchemaHandler,
-    GetJsonSchemaHandler,
-)
+from pydantic import AfterValidator, BaseModel, Field, GetCoreSchemaHandler, GetJsonSchemaHandler
 from pydantic.json_schema import JsonSchemaValue
 from pydantic_core.core_schema import (
     CoreSchema,
@@ -105,6 +100,19 @@ MongoQueryField: dict[str, Any] = Field(
 )
 
 
+class QueryParams(BaseModel):
+    query: MongoQuery = MongoQueryField
+
+
+class SortOrder(IntEnum):
+    ASC = 1
+    DESC = -1
+
+
+class SortParams(BaseModel):
+    sort: dict[str, SortOrder] | None = None
+
+
 class PyObjectId(ObjectId):
     """
     Object Id field. Compatible with Pydantic.
@@ -174,8 +182,3 @@ class TreeMixin:
 
 
 class BaseTreeModel(pydantic.BaseModel, IDMixin, TreeMixin): ...
-
-
-class SortOrder(IntEnum):
-    ASC = 1
-    DESC = -1
