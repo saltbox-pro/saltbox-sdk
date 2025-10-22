@@ -1,6 +1,7 @@
 from typing import Any, TypeVar, overload
 
 from pydantic import BaseModel
+from pymongo.asynchronous.client_session import AsyncClientSession as MongoAsyncClientSession
 
 from saltbox_sdk.db.mongo.repository_base import BaseMongoRepository
 from saltbox_sdk.db.mongo.schemas_base import PyObjectId, SortOrder
@@ -18,23 +19,36 @@ class MongoBaseService[
     UpdateSchema: BaseModel,
 ](AbstractService[Repository]):
     @overload
-    async def get(self, query: dict[str, Any] | PyObjectId) -> ModelType: ...
+    async def get(
+        self,
+        query: dict[str, Any] | PyObjectId,
+        *,
+        session: MongoAsyncClientSession | None = None,
+    ) -> ModelType: ...
 
     @overload
     async def get(
-        self, query: dict[str, Any] | PyObjectId, *, projection_model: type[ProjectionModel]
+        self,
+        query: dict[str, Any] | PyObjectId,
+        *,
+        session: MongoAsyncClientSession | None = None,
+        projection_model: type[ProjectionModel],
     ) -> ProjectionModel: ...
 
     async def get(
-        self, query: dict[str, Any] | PyObjectId, *, projection_model: type[ProjectionModel] | None = None
+        self,
+        query: dict[str, Any] | PyObjectId,
+        *,
+        session: MongoAsyncClientSession | None = None,
+        projection_model: type[ProjectionModel] | None = None,
     ) -> ModelType | ProjectionModel:
         if isinstance(query, PyObjectId):
             query = {'_id': query}
 
         if projection_model:
-            result = await self.repo.get(query=query, projection_model=projection_model)
+            result = await self.repo.get(query=query, projection_model=projection_model, session=session)
         else:
-            result = await self.repo.get(query=query)
+            result = await self.repo.get(query=query, session=session)
 
         return result
 
@@ -45,6 +59,7 @@ class MongoBaseService[
         limit: int = 0,
         skip: int = 0,
         *,
+        session: MongoAsyncClientSession | None = None,
         sort: dict[str, SortOrder] | None = None,
     ) -> list[ModelType]: ...
 
@@ -55,6 +70,7 @@ class MongoBaseService[
         limit: int,
         skip: int,
         *,
+        session: MongoAsyncClientSession | None = None,
         projection_model: type[ProjectionModel] = StubDefault,
         sort: dict[str, SortOrder] | None = None,
     ) -> list[ProjectionModel]: ...
@@ -65,29 +81,45 @@ class MongoBaseService[
         limit: int = 0,
         skip: int = 0,
         *,
+        session: MongoAsyncClientSession | None = None,
         projection_model: type[ProjectionModel] | None = None,
         sort: dict[str, SortOrder] | None = None,
     ) -> list[ModelType] | list[ProjectionModel]:
         if projection_model:
             return await self.repo.get_list(
-                query=query, sort=sort, limit=limit, skip=skip, projection_model=projection_model
+                query=query, sort=sort, limit=limit, skip=skip, projection_model=projection_model, session=session
             )
 
-        return await self.repo.get_list(query=query, sort=sort, limit=limit, skip=skip)
+        return await self.repo.get_list(query=query, sort=sort, limit=limit, skip=skip, session=session)
 
     @overload
-    async def create(self, data: CreateSchema) -> ModelType: ...
+    async def create(
+        self,
+        data: CreateSchema,
+        *,
+        session: MongoAsyncClientSession | None = None,
+    ) -> ModelType: ...
 
     @overload
-    async def create(self, data: CreateSchema, *, projection_model: type[ProjectionModel]) -> ProjectionModel: ...
+    async def create(
+        self,
+        data: CreateSchema,
+        *,
+        session: MongoAsyncClientSession | None = None,
+        projection_model: type[ProjectionModel],
+    ) -> ProjectionModel: ...
 
     async def create(
-        self, data: CreateSchema, *, projection_model: type[ProjectionModel] | None = None
+        self,
+        data: CreateSchema,
+        *,
+        session: MongoAsyncClientSession | None = None,
+        projection_model: type[ProjectionModel] | None = None,
     ) -> ModelType | ProjectionModel:
         if projection_model:
-            result = await self.repo.create(data, projection_model=projection_model)
+            result = await self.repo.create(data=data, projection_model=projection_model, session=session)
         else:
-            result = await self.repo.create(data)
+            result = await self.repo.create(data=data, session=session)
 
         return result
 
@@ -98,6 +130,7 @@ class MongoBaseService[
         limit: int,
         skip: int,
         *,
+        session: MongoAsyncClientSession | None = None,
         sort: dict[str, SortOrder] | None = None,
     ) -> PaginatedResponse[ModelType]: ...
 
@@ -108,6 +141,7 @@ class MongoBaseService[
         limit: int,
         skip: int,
         *,
+        session: MongoAsyncClientSession | None = None,
         projection_model: type[ProjectionModel],
         sort: dict[str, SortOrder] | None = None,
     ) -> PaginatedResponse[ProjectionModel]: ...
@@ -118,23 +152,36 @@ class MongoBaseService[
         limit: int = 0,
         skip: int = 0,
         *,
+        session: MongoAsyncClientSession | None = None,
         projection_model: type[ProjectionModel] | None = None,
         sort: dict[str, SortOrder] | None = None,
     ) -> PaginatedResponse[ModelType] | PaginatedResponse[ProjectionModel]:
         total = await self.repo.count(query)
 
         if projection_model:
-            data = await self.repo.get_list(query, sort=sort, limit=limit, skip=skip, projection_model=projection_model)
+            data = await self.repo.get_list(
+                query, sort=sort, limit=limit, skip=skip, projection_model=projection_model, session=session
+            )
             return PaginatedResponse[ProjectionModel](total=total, data=data)
         else:
-            data = await self.repo.get_list(query, sort=sort, limit=limit, skip=skip)
+            data = await self.repo.get_list(query, sort=sort, limit=limit, skip=skip, session=session)
             return PaginatedResponse[ModelType](total=total, data=data)
 
-    async def count(self, query: dict[str, Any] | None = None) -> int:
-        return await self.repo.count(query)
+    async def count(
+        self,
+        query: dict[str, Any] | None = None,
+        *,
+        session: MongoAsyncClientSession | None = None,
+    ) -> int:
+        return await self.repo.count(query=query, session=session)
 
-    async def exists(self, query: dict[str, Any]) -> bool:
-        return await self.repo.exists(query)
+    async def exists(
+        self,
+        query: dict[str, Any],
+        *,
+        session: MongoAsyncClientSession | None = None,
+    ) -> bool:
+        return await self.repo.exists(query=query, session=session)
 
     @overload
     async def update(
@@ -142,6 +189,8 @@ class MongoBaseService[
         query: dict[str, Any] | PyObjectId,
         data: UpdateSchema | dict[str, Any],
         exclude_unset: bool = True,
+        *,
+        session: MongoAsyncClientSession | None = None,
     ) -> ModelType: ...
 
     @overload
@@ -151,6 +200,7 @@ class MongoBaseService[
         data: UpdateSchema | dict[str, Any],
         exclude_unset: bool = True,
         *,
+        session: MongoAsyncClientSession | None = None,
         projection_model: type[ProjectionModel],
     ) -> ProjectionModel: ...
 
@@ -160,6 +210,7 @@ class MongoBaseService[
         data: UpdateSchema | dict[str, Any],
         exclude_unset: bool = True,
         *,
+        session: MongoAsyncClientSession | None = None,
         projection_model: type[ProjectionModel] | None = None,
     ) -> ModelType | ProjectionModel:
         if isinstance(query, PyObjectId):
@@ -167,18 +218,28 @@ class MongoBaseService[
 
         if projection_model:
             result = await self.repo.update(
-                query=query, data=data, projection_model=projection_model, exclude_unset=exclude_unset
+                query=query, data=data, projection_model=projection_model, exclude_unset=exclude_unset, session=session
             )
         else:
-            result = await self.repo.update(query=query, data=data, exclude_unset=exclude_unset)
+            result = await self.repo.update(query=query, data=data, exclude_unset=exclude_unset, session=session)
 
         return result
 
-    async def delete(self, query: dict[str, Any] | PyObjectId) -> int:
+    async def delete(
+        self,
+        query: dict[str, Any] | PyObjectId,
+        *,
+        session: MongoAsyncClientSession | None = None,
+    ) -> int:
         if isinstance(query, PyObjectId):
             query = {'_id': query}
 
-        return await self.repo.delete(query)
+        return await self.repo.delete(query=query, session=session)
 
-    async def delete_many(self, query: dict[str, Any]) -> int:
-        return await self.repo.delete_many(query=query)
+    async def delete_many(
+        self,
+        query: dict[str, Any],
+        *,
+        session: MongoAsyncClientSession | None = None,
+    ) -> int:
+        return await self.repo.delete_many(query=query, session=session)

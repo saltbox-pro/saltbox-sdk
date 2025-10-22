@@ -3,8 +3,10 @@ from inspect import isclass
 from typing import Any, ClassVar, TypeVar, cast, overload
 
 from pydantic import BaseModel
+from pymongo.asynchronous.client_session import AsyncClientSession as MongoAsyncClientSession
 from pymongo.asynchronous.collection import AsyncCollection
 from pymongo.asynchronous.database import AsyncDatabase as MongoAsyncDatabase
+from pymongo.asynchronous.mongo_client import AsyncMongoClient
 from pymongo.errors import DuplicateKeyError as MongoDuplicateKeyError
 from pymongo.errors import OperationFailure
 
@@ -39,6 +41,10 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         self.__validate()
 
     @property
+    def client(self) -> AsyncMongoClient:
+        return self.__database.client
+
+    @property
     def __query_overrides__(self) -> dict[str, Callable]:
         query_overrides = {}
 
@@ -58,25 +64,25 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         query_overrides = self.__query_overrides__
 
         def recursive_override(data: dict[str, Any]) -> dict[str, Any]:
-            query: dict[str, Any] = {}
+            _query: dict[str, Any] = {}
 
             for data_key, data_value in data.items():
                 if data_key in query_overrides.keys():
                     override_key, override_value = query_overrides[data_key](data_key, data_value)
                     if override_value is not None:
-                        query[override_key] = override_value
+                        _query[override_key] = override_value
                 else:
                     if isinstance(data_value, dict):
-                        query[data_key] = recursive_override(data_value)
+                        _query[data_key] = recursive_override(data_value)
                     # TODO (i.moshkov): check if this is correct
                     elif isinstance(data_value, list) and data_key not in ['$in', '$nin']:
-                        query[data_key] = [recursive_override(item_value) for item_value in data_value]
+                        _query[data_key] = [recursive_override(item_value) for item_value in data_value]
                     else:
                         try:
-                            query['$or'] = [{data_key: data_value}, {data_key: PyObjectId(data_value)}]
+                            _query['$or'] = [{data_key: data_value}, {data_key: PyObjectId(data_value)}]
                         except Exception:
-                            query[data_key] = data_value
-            return query
+                            _query[data_key] = data_value
+            return _query
 
         query = recursive_override(query)
 
@@ -124,7 +130,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         for field_name, field in model.model_fields.items():
             if field.annotation and isclass(field.annotation) and issubclass(field.annotation, BaseModel):
                 sub_model = field.annotation
-                for sub_field_name in sub_model.model_fields:
+                for sub_field_name in sub_model.model_fields.keys():
                     projection[f'{field_name}.{sub_field_name}'] = 1
             else:
                 projection[field_name] = 1
@@ -132,20 +138,33 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         return projection
 
     @overload
-    async def get(self, query: PyObjectId | dict[str, Any]) -> T: ...
+    async def get(
+        self,
+        query: PyObjectId | dict[str, Any],
+        *,
+        session: MongoAsyncClientSession | None = None,
+    ) -> T: ...
 
     @overload
     async def get(
-        self, query: PyObjectId | dict[str, Any], projection_model: type[ProjectionModel]
+        self,
+        query: PyObjectId | dict[str, Any],
+        *,
+        session: MongoAsyncClientSession | None = None,
+        projection_model: type[ProjectionModel],
     ) -> ProjectionModel: ...
 
     async def get(
-        self, query: PyObjectId | dict[str, Any], projection_model: type[ProjectionModel] | None = None
+        self,
+        query: PyObjectId | dict[str, Any],
+        *,
+        session: MongoAsyncClientSession | None = None,
+        projection_model: type[ProjectionModel] | None = None,
     ) -> ProjectionModel | T:
         projection = self._get_projection_from_model(projection_model) if projection_model else None
 
         query = self.__prepare_query__(query)
-        result = await self.collection.find(filter=query, projection=projection).to_list()
+        result = await self.collection.find(filter=query, projection=projection, session=session).to_list()
 
         if len(result) == 0:
             raise ObjectNotFoundException(obj_type=self.Meta.collection_name, query=query)
@@ -166,6 +185,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         limit: int,
         skip: int,
         *,
+        session: MongoAsyncClientSession | None = None,
         sort: dict[str, SortOrder] | None = None,
     ) -> list[T]: ...
 
@@ -175,8 +195,9 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         query: dict[str, Any] | None,
         limit: int,
         skip: int,
-        projection_model: type[ProjectionModel],
         *,
+        session: MongoAsyncClientSession | None = None,
+        projection_model: type[ProjectionModel],
         sort: dict[str, SortOrder] | None = None,
     ) -> list[ProjectionModel]: ...
 
@@ -185,14 +206,17 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         query: dict[str, Any] | None = None,
         limit: int = 0,
         skip: int = 0,
-        projection_model: type[ProjectionModel] | None = None,
         *,
+        session: MongoAsyncClientSession | None = None,
+        projection_model: type[ProjectionModel] | None = None,
         sort: dict[str, SortOrder] | None = None,
     ) -> list[T] | list[ProjectionModel]:
         projection = self._get_projection_from_model(projection_model) if projection_model else None
         query = self.__prepare_query__(query)
         mongo_sort = [(field, order.value) for field, order in sort.items()] if sort else None
-        result = self.collection.find(filter=query, projection=projection, limit=limit, skip=skip, sort=mongo_sort)
+        result = self.collection.find(
+            filter=query, projection=projection, limit=limit, skip=skip, sort=mongo_sort, session=session
+        )
 
         if projection_model:
             return [
@@ -210,25 +234,46 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
                 for doc in await result.to_list()
             ]
 
-    async def count(self, query: dict[str, Any] | None = None) -> int:
+    async def count(
+        self,
+        query: dict[str, Any] | None = None,
+        *,
+        session: MongoAsyncClientSession | None = None,
+    ) -> int:
         query = self.__prepare_query__(query)
-        return await self.collection.count_documents(query)
+        return await self.collection.count_documents(filter=query, session=session)
 
-    async def exists(self, query: dict[str, Any]) -> bool:
+    async def exists(
+        self,
+        query: dict[str, Any],
+        *,
+        session: MongoAsyncClientSession | None = None,
+    ) -> bool:
         query = self.__prepare_query__(query)
-        return await self.collection.count_documents(query, limit=1) == 1
-
-    @overload
-    async def create(self, data: ModelType | dict[str, Any]) -> T: ...
+        return await self.collection.count_documents(filter=query, limit=1, session=session) == 1
 
     @overload
     async def create(
-        self, data: ModelType | dict[str, Any], projection_model: type[ProjectionModel]
+        self,
+        data: ModelType | dict[str, Any],
+        *,
+        session: MongoAsyncClientSession | None = None,
+    ) -> T: ...
+
+    @overload
+    async def create(
+        self,
+        data: ModelType | dict[str, Any],
+        *,
+        session: MongoAsyncClientSession | None = None,
+        projection_model: type[ProjectionModel],
     ) -> ProjectionModel: ...
 
     async def create(  # noqa: C901
         self,
         data: ModelType | dict[str, Any],
+        *,
+        session: MongoAsyncClientSession | None = None,
         projection_model: type[ProjectionModel] | None = None,
     ) -> T | ProjectionModel:
         try:
@@ -248,7 +293,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
                 data[field] = now
 
         try:
-            result = await self.collection.insert_one(data)
+            result = await self.collection.insert_one(document=data, session=session)
         except MongoDuplicateKeyError as e:
             logger.debug(f'{type(e.details)}')
             if e.details and 'keyValue' in e.details:
@@ -269,6 +314,8 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         query: PyObjectId | dict[str, Any],
         data: ModelType | dict[str, Any],
         exclude_unset: bool = True,
+        *,
+        session: MongoAsyncClientSession | None = None,
     ) -> T: ...
 
     @overload
@@ -278,6 +325,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         data: ModelType | dict[str, Any],
         exclude_unset: bool = True,
         *,
+        session: MongoAsyncClientSession | None = None,
         projection_model: type[ProjectionModel],
     ) -> ProjectionModel: ...
 
@@ -286,6 +334,8 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         query: PyObjectId | dict[str, Any],
         data: ModelType | dict[str, Any],
         exclude_unset: bool = True,
+        *,
+        session: MongoAsyncClientSession | None = None,
         projection_model: type[ProjectionModel] | None = None,
     ) -> T | ProjectionModel:
         try:
@@ -305,7 +355,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
             raise ObjectNotFoundException(obj_type=self.Meta.collection_name, query=query)
 
         # TODO (a.karmanov): FIXME What if query matches multiple? May be UpdateMany is more appropriate?
-        result = await self.collection.update_one(query, {'$set': data}, upsert=False)
+        result = await self.collection.update_one(filter=query, update={'$set': data}, upsert=False, session=session)
         if result.modified_count == 0:
             raise ObjectUpdateException()
 
@@ -314,26 +364,41 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         else:
             return await self.get(query)
 
-    async def delete(self, query: PyObjectId | dict[str, Any]) -> int:
+    async def delete(
+        self,
+        query: PyObjectId | dict[str, Any],
+        *,
+        session: MongoAsyncClientSession | None = None,
+    ) -> int:
         query = self.__prepare_query__(query)
-        count = await self.count(query)
+        count = await self.count(query=query, session=session)
 
         if count == 0:
             raise ObjectNotFoundException(obj_type=self.Meta.collection_name, query=query)
         elif count > 1:
             raise MultipleObjectsFoundException()
 
-        result = await self.collection.delete_one(query)
+        result = await self.collection.delete_one(filter=query, session=session)
         return result.deleted_count
 
-    async def delete_many(self, query: dict[str, Any]) -> int:
+    async def delete_many(
+        self,
+        query: dict[str, Any],
+        *,
+        session: MongoAsyncClientSession | None = None,
+    ) -> int:
         query = self.__prepare_query__(query)
-        result = await self.collection.delete_many(query)
+        result = await self.collection.delete_many(filter=query, session=session)
         return result.deleted_count
 
-    async def aggregate(self, pipeline: list[dict]) -> list:
+    async def aggregate(
+        self,
+        pipeline: list[dict],
+        *,
+        session: MongoAsyncClientSession | None = None,
+    ) -> list:
         try:
-            cursor = await self.collection.aggregate(pipeline)
+            cursor = await self.collection.aggregate(pipeline=pipeline, session=session)
             return await cursor.to_list()
         except OperationFailure as e:
             msg = f'Error during pipeline execution in aggregate: {e}'

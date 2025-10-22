@@ -14,7 +14,9 @@ class _MongoClientSingleton:
     def __new__(cls) -> '_MongoClientSingleton':
         if not hasattr(cls, 'instance'):
             cls.instance = super().__new__(cls)
-            cls.instance.mongo_client = AsyncMongoClient(MONGO_SETTINGS.mongo_url)
+            cls.instance.mongo_client = AsyncMongoClient(
+                MONGO_SETTINGS.mongo_url, replicaSet=MONGO_SETTINGS.mongo_replicaset, directConnection=True
+            )
             logger.debug('Mongo initialized')
         return cls.instance
 
@@ -41,6 +43,8 @@ def get_mongo() -> Generator[MongoAsyncDatabase, None, None]:
 
 
 def get_sync_mongo_db(db_name: str = MONGO_SETTINGS.mongo_db) -> MongoSyncDatabase:
-    client: MongoClient = MongoClient(MONGO_SETTINGS.mongo_url)
+    client: MongoClient = MongoClient(
+        MONGO_SETTINGS.mongo_url, replicaSet=MONGO_SETTINGS.mongo_replicaset, directConnection=True
+    )
     db = client[db_name]
     return db

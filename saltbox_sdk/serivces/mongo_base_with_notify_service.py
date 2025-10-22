@@ -2,6 +2,7 @@ import json
 from typing import Any, overload, override
 
 from pydantic import BaseModel
+from pymongo.asynchronous.client_session import AsyncClientSession as MongoAsyncClientSession
 from redis.asyncio import Redis
 
 from saltbox_sdk.db.mongo.repository_base import BaseMongoRepository, ProjectionModel
@@ -31,6 +32,7 @@ class MongoBaseWithNotifyService[
         self,
         data: CreateSchema,
         *,
+        session: MongoAsyncClientSession | None = None,
         notify: bool = True,
     ) -> ModelType: ...
 
@@ -39,6 +41,7 @@ class MongoBaseWithNotifyService[
         self,
         data: CreateSchema,
         *,
+        session: MongoAsyncClientSession | None = None,
         projection_model: type[ProjectionModel],
         notify: bool = True,
     ) -> ProjectionModel: ...
@@ -48,15 +51,16 @@ class MongoBaseWithNotifyService[
         self,
         data: CreateSchema,
         *,
+        session: MongoAsyncClientSession | None = None,
         projection_model: type[ProjectionModel] | None = None,
         notify: bool = True,
     ) -> ModelType | ProjectionModel:
         obj: ModelType | ProjectionModel
 
         if projection_model:
-            obj = await super().create(data=data, projection_model=projection_model)
+            obj = await super().create(data=data, projection_model=projection_model, session=session)
         else:
-            obj = await super().create(data=data)
+            obj = await super().create(data=data, session=session)
 
         if notify and hasattr(obj, 'id'):
             await self._notify(obj=obj, action='create')
@@ -70,6 +74,7 @@ class MongoBaseWithNotifyService[
         data: UpdateSchema | dict[str, Any],
         exclude_unset: bool = True,
         *,
+        session: MongoAsyncClientSession | None = None,
         notify: bool = True,
     ) -> ModelType: ...
 
@@ -80,6 +85,7 @@ class MongoBaseWithNotifyService[
         data: UpdateSchema | dict[str, Any],
         exclude_unset: bool = True,
         *,
+        session: MongoAsyncClientSession | None = None,
         projection_model: type[ProjectionModel],
         notify: bool = True,
     ) -> ProjectionModel: ...
@@ -91,6 +97,7 @@ class MongoBaseWithNotifyService[
         data: UpdateSchema | dict[str, Any],
         exclude_unset: bool = True,
         *,
+        session: MongoAsyncClientSession | None = None,
         projection_model: type[ProjectionModel] | None = None,
         notify: bool = True,
     ) -> ModelType | ProjectionModel:
@@ -98,10 +105,10 @@ class MongoBaseWithNotifyService[
 
         if projection_model:
             obj = await super().update(
-                query=query, data=data, exclude_unset=exclude_unset, projection_model=projection_model
+                query=query, data=data, exclude_unset=exclude_unset, projection_model=projection_model, session=session
             )
         else:
-            obj = await super().update(query=query, data=data, exclude_unset=exclude_unset)
+            obj = await super().update(query=query, data=data, exclude_unset=exclude_unset, session=session)
 
         if isinstance(notify, bool) and notify and hasattr(obj, 'id'):
             await self._notify(obj=obj, action='update')
@@ -109,15 +116,32 @@ class MongoBaseWithNotifyService[
         return obj
 
     @overload
-    async def delete(self, query: dict[str, Any] | PyObjectId) -> int: ...
+    async def delete(
+        self,
+        query: dict[str, Any] | PyObjectId,
+        *,
+        session: MongoAsyncClientSession | None = None,
+    ) -> int: ...
 
     @overload
-    async def delete(self, query: dict[str, Any] | PyObjectId, *, notify: bool = True) -> int: ...
+    async def delete(
+        self,
+        query: dict[str, Any] | PyObjectId,
+        *,
+        session: MongoAsyncClientSession | None = None,
+        notify: bool = True,
+    ) -> int: ...
 
     @override
-    async def delete(self, query: dict[str, Any] | PyObjectId, *, notify: bool = True) -> int:
-        obj = await self.get(query=query)
-        deleted_count = await super().delete(query=query)
+    async def delete(
+        self,
+        query: dict[str, Any] | PyObjectId,
+        *,
+        session: MongoAsyncClientSession | None = None,
+        notify: bool = True,
+    ) -> int:
+        obj = await self.get(query=query, session=session)
+        deleted_count = await super().delete(query=query, session=session)
 
         if notify:
             await self._notify(obj=obj, action='delete')
@@ -125,15 +149,32 @@ class MongoBaseWithNotifyService[
         return deleted_count
 
     @overload
-    async def delete_many(self, query: dict[str, Any] | PyObjectId) -> int: ...
+    async def delete_many(
+        self,
+        query: dict[str, Any] | PyObjectId,
+        *,
+        session: MongoAsyncClientSession | None = None,
+    ) -> int: ...
 
     @overload
-    async def delete_many(self, query: dict[str, Any] | PyObjectId, *, notify: bool = True) -> int: ...
+    async def delete_many(
+        self,
+        query: dict[str, Any] | PyObjectId,
+        *,
+        session: MongoAsyncClientSession | None = None,
+        notify: bool = True,
+    ) -> int: ...
 
     @override
-    async def delete_many(self, query: dict[str, Any] | PyObjectId, *, notify: bool = True) -> int:
-        objs = await self.get_list(query=query)
-        deleted_count = await super().delete(query=query)
+    async def delete_many(
+        self,
+        query: dict[str, Any] | PyObjectId,
+        *,
+        session: MongoAsyncClientSession | None = None,
+        notify: bool = True,
+    ) -> int:
+        objs = await self.get_list(query=query, session=session)
+        deleted_count = await super().delete(query=query, session=session)
 
         for obj in objs:
             if isinstance(notify, bool) and notify:
