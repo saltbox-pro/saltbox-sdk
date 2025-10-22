@@ -82,7 +82,9 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
 
         return cast(dict[str, Any], recursive_replace_dates(query))
 
-    async def prepare_object_data(self, data: dict[str, Any]) -> dict[str, Any]:
+    async def prepare_object_data(
+        self, data: dict[str, Any], projection_model: type[ProjectionModel] | None = None
+    ) -> dict[str, Any]:
         return data
 
     @overload
@@ -150,7 +152,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         elif len(result) > 1:
             raise MultipleObjectsFoundException()
 
-        data = await self.prepare_object_data(result[0])
+        data = await self.prepare_object_data(data=result[0], projection_model=projection_model)
 
         if projection_model is not None:
             return projection_model.model_validate(data)
@@ -194,12 +196,18 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
 
         if projection_model:
             return [
-                projection_model.model_validate(await self.prepare_object_data(doc)) for doc in await result.to_list()
+                projection_model.model_validate(
+                    await self.prepare_object_data(data=doc, projection_model=projection_model)
+                )
+                for doc in await result.to_list()
             ]
             # return [projection_model.model_validate(doc) async for doc in result]
         else:
             return [
-                self.default_model.model_validate(await self.prepare_object_data(doc)) for doc in await result.to_list()
+                self.default_model.model_validate(
+                    await self.prepare_object_data(data=doc, projection_model=projection_model)
+                )
+                for doc in await result.to_list()
             ]
 
     async def count(self, query: dict[str, Any] | None = None) -> int:
