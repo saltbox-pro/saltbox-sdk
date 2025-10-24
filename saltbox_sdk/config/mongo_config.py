@@ -12,11 +12,16 @@ class MongoSettings(BaseSettings):
     mongo_password: str | None = None
     mongo_port: int = 27017
     mongo_user: str = ''
-    mongo_replicaset: str = 'rs0'
+    mongo_replicaset: str | None = None
 
     @property
     def mongo_url(self) -> str:
-        return f'mongodb://{self.mongo_user}:{self.mongo_password}@{self.mongo_host}:{self.mongo_port}/'
+        url = f'mongodb://{self.mongo_user}:{self.mongo_password}@{self.mongo_host}:{self.mongo_port}/'
+
+        if self.mongo_replicaset is not None:
+            url += f'?replicaSet={self.mongo_replicaset}'
+
+        return url
 
 
 MONGO_SETTINGS = MongoSettings()
