@@ -4,7 +4,7 @@ from typing import Any, ClassVar, TypeVar, cast, overload
 
 from pydantic import BaseModel
 from pymongo.asynchronous.client_session import AsyncClientSession as MongoAsyncClientSession
-from pymongo.asynchronous.collection import AsyncCollection
+from pymongo.asynchronous.collection import AsyncCollection, ReturnDocument
 from pymongo.asynchronous.database import AsyncDatabase as MongoAsyncDatabase
 from pymongo.asynchronous.mongo_client import AsyncMongoClient
 from pymongo.errors import DuplicateKeyError as MongoDuplicateKeyError
@@ -338,6 +338,8 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         session: MongoAsyncClientSession | None = None,
         projection_model: type[ProjectionModel] | None = None,
     ) -> T | ProjectionModel:
+        projection = self._get_projection_from_model(projection_model) if projection_model else None
+
         try:
             data = await self.validate_object_data(data)
         except ValueError as e:
@@ -355,14 +357,24 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
             raise ObjectNotFoundException(obj_type=self.Meta.collection_name, query=query)
 
         # TODO (a.karmanov): FIXME What if query matches multiple? May be UpdateMany is more appropriate?
-        result = await self.collection.update_one(filter=query, update={'$set': data}, upsert=False, session=session)
-        if result.modified_count == 0:
+        result = await self.collection.find_one_and_update(
+            filter=query,
+            update={'$set': data},
+            upsert=False,
+            return_document=ReturnDocument.AFTER,
+            session=session,
+            projection=projection,
+        )
+
+        if result is None:
             raise ObjectUpdateException()
 
-        if projection_model:
-            return await self.get(query, projection_model=projection_model)
+        data = await self.prepare_object_data(data=result, projection_model=projection_model)
+
+        if projection_model is not None:
+            return projection_model.model_validate(data)
         else:
-            return await self.get(query)
+            return self.default_model.model_validate(data)
 
     async def delete(
         self,
