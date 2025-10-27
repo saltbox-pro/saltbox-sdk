@@ -177,6 +177,9 @@ class IDMixin:
     id: PyObjectId = Field(title='ID', alias='_id', serialization_alias='id')
 
 
+class EmptyModel(pydantic.BaseModel, IDMixin): ...
+
+
 class TreeMixin:
     parent_id: PyObjectId | None = Field(title='Parent ID', default=None)
 
