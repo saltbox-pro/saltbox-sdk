@@ -5,6 +5,8 @@ from typing import Any, ClassVar, TypeVar, cast, overload
 from pydantic import BaseModel
 from pymongo.asynchronous.client_session import AsyncClientSession as MongoAsyncClientSession
 from pymongo.asynchronous.collection import AsyncCollection, ReturnDocument
+from pymongo.asynchronous.command_cursor import AsyncCommandCursor
+from pymongo.asynchronous.cursor import AsyncCursor
 from pymongo.asynchronous.database import AsyncDatabase as MongoAsyncDatabase
 from pymongo.asynchronous.mongo_client import AsyncMongoClient
 from pymongo.errors import DuplicateKeyError as MongoDuplicateKeyError
@@ -34,6 +36,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         auto_now_add_fields: ClassVar[list[str]]
         auto_now_fields: ClassVar[list[str]]
         query_overrides: ClassVar[dict[str, str]]
+        joins: ClassVar[dict[str, list[Any]]] = {}
 
     def __init__(self, database: MongoAsyncDatabase):
         super().__init__()
@@ -43,6 +46,17 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
     @property
     def client(self) -> AsyncMongoClient:
         return self.__database.client
+
+    @property
+    def collection(self) -> AsyncCollection:
+        return self.__database[self.Meta.collection_name]
+
+    @property
+    def joins(self) -> dict[str, list[Any]]:
+        if hasattr(self.Meta, 'joins') and self.Meta.joins:
+            return self.Meta.joins
+
+        return {}
 
     @property
     def __query_overrides__(self) -> dict[str, Callable]:
@@ -88,6 +102,34 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
 
         return cast(dict[str, Any], recursive_replace_dates(query))
 
+    async def prepare_pipline(
+        self,
+        projection: dict[str, Any],
+        query: dict[str, Any] | None = None,
+        limit: int | None = None,
+        skip: int | None = None,
+        sort: dict[str, SortOrder] | None = None,
+    ) -> list[dict[str, Any]]:
+        pipeline: list[dict[str, Any]] = []
+
+        for field_key, _pipline in self.joins.items():
+            if any(field_key == s or f'{field_key}.' in s for s in projection.keys()):
+                pipeline += _pipline
+
+        if pipeline:
+            if query:
+                pipeline.append({'$match': query})
+            if skip:
+                pipeline.append({'$skip': skip})
+            if limit:
+                pipeline.append({'$limit': limit})
+            if sort:
+                pipeline.append({'$sort': dict(sort)})
+
+            pipeline.append({'$project': projection})
+
+        return pipeline
+
     async def prepare_object_data(
         self, data: dict[str, Any], projection_model: type[ProjectionModel] | None = None
     ) -> dict[str, Any]:
@@ -101,10 +143,6 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
 
     async def validate_object_data(self, data: ModelType | dict[str, Any]) -> ModelType | dict[str, Any]:
         return data
-
-    @property
-    def collection(self) -> AsyncCollection:
-        return self.__database[self.Meta.collection_name]
 
     def __validate(self) -> None:
         if 'id' not in self.default_model.model_fields:
@@ -125,7 +163,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
                     raise SaltBoxValidationException(msg.format(field, self.Meta.collection_name))
 
     @classmethod
-    def _get_projection_from_model(cls, model: type[ProjectionModel], path: list | None = None) -> dict[str, Any]:
+    def _get_projection_from_model(cls, model: type[BaseModel], path: list | None = None) -> dict[str, Any]:
         projection = {}
         if not path:
             path = []
@@ -168,10 +206,17 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         session: MongoAsyncClientSession | None = None,
         projection_model: type[ProjectionModel] | None = None,
     ) -> ProjectionModel | T:
-        projection = self._get_projection_from_model(projection_model) if projection_model else None
-
+        if projection_model:
+            projection = self._get_projection_from_model(projection_model)
+        else:
+            projection = self._get_projection_from_model(self.default_model)
         query = self.__prepare_query__(query)
-        result = await self.collection.find(filter=query, projection=projection, session=session).to_list()
+        pipeline = await self.prepare_pipline(projection, query)
+
+        if pipeline:
+            result = await (await self.collection.aggregate(pipeline=pipeline, session=session)).to_list()
+        else:
+            result = await self.collection.find(filter=query, projection=projection, session=session).to_list()
 
         if len(result) == 0:
             raise ObjectNotFoundException(obj_type=self.Meta.collection_name, query=query)
@@ -218,27 +263,29 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         projection_model: type[ProjectionModel] | None = None,
         sort: dict[str, SortOrder] | None = None,
     ) -> list[T] | list[ProjectionModel]:
-        projection = self._get_projection_from_model(projection_model) if projection_model else None
+        if projection_model:
+            projection = self._get_projection_from_model(projection_model)
+        else:
+            projection = self._get_projection_from_model(self.default_model)
         query = self.__prepare_query__(query)
-        mongo_sort = [(field, order.value) for field, order in sort.items()] if sort else None
-        result = self.collection.find(
-            filter=query, projection=projection, limit=limit, skip=skip, sort=mongo_sort, session=session
-        )
+        pipeline = await self.prepare_pipline(projection, query, limit, skip, sort)
+
+        result: AsyncCursor[Any] | AsyncCommandCursor[Any]
+        if pipeline:
+            result = await self.collection.aggregate(pipeline=pipeline, session=session)
+        else:
+            mongo_sort = [(field, order.value) for field, order in sort.items()] if sort else None
+            result = self.collection.find(
+                filter=query, projection=projection, limit=limit, skip=skip, sort=mongo_sort, session=session
+            )
 
         if projection_model:
             return [
-                projection_model.model_validate(
-                    await self.prepare_object_data(data=doc, projection_model=projection_model)
-                )
-                for doc in await result.to_list()
+                projection_model.model_validate(await self.prepare_object_data(doc)) for doc in await result.to_list()
             ]
-            # return [projection_model.model_validate(doc) async for doc in result]
         else:
             return [
-                self.default_model.model_validate(
-                    await self.prepare_object_data(data=doc, projection_model=projection_model)
-                )
-                for doc in await result.to_list()
+                self.default_model.model_validate(await self.prepare_object_data(doc)) for doc in await result.to_list()
             ]
 
     async def count(
@@ -311,9 +358,9 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
             raise ObjectCreateException()
 
         if projection_model:
-            return await self.get(PyObjectId(result.inserted_id), projection_model=projection_model)
+            return await self.get(PyObjectId(result.inserted_id), session=session, projection_model=projection_model)
         else:
-            return await self.get(PyObjectId(result.inserted_id))
+            return await self.get(PyObjectId(result.inserted_id), session=session)
 
     @overload
     async def update(
