@@ -124,16 +124,23 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
                     msg = f'Meta `auto_now_fields` `{field}` should be in model fields'
                     raise SaltBoxValidationException(msg.format(field, self.Meta.collection_name))
 
-    @staticmethod
-    def _get_projection_from_model(model: type[ProjectionModel]) -> dict[str, Any]:
+    @classmethod
+    def _get_projection_from_model(cls, model: type[ProjectionModel], path: list | None = None) -> dict[str, Any]:
         projection = {}
+        if not path:
+            path = []
+
         for field_name, field in model.model_fields.items():
             if field.annotation and isclass(field.annotation) and issubclass(field.annotation, BaseModel):
                 sub_model = field.annotation
-                for sub_field_name in sub_model.model_fields.keys():
-                    projection[f'{field_name}.{sub_field_name}'] = 1
+                projection.update(cls._get_projection_from_model(sub_model, [*path, field_name]))
             else:
-                projection[field_name] = 1
+                if field.alias:
+                    computed_field_name = field.alias
+                else:
+                    computed_field_name = field_name
+
+                projection['.'.join([*path, computed_field_name])] = 1
 
         return projection
 
