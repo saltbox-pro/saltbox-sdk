@@ -295,9 +295,26 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         query: dict[str, Any] | None = None,
         *,
         session: MongoAsyncClientSession | None = None,
+        limit: int | None = None,
     ) -> int:
         query = self.__prepare_query__(query)
-        return await self.collection.count_documents(filter=query, session=session)
+        projection = self._get_projection_from_model(self.default_model)
+        pipeline = await self.prepare_pipline(projection, query)
+
+        if pipeline:
+            pipeline.append({'$count': 'count'})
+
+            if limit is not None:
+                pipeline.append({'$limit': limit})
+
+            result = await (await self.collection.aggregate(pipeline=pipeline, session=session)).to_list()
+
+            if not result:
+                return 0
+
+            return int(result[0]['count'])
+        else:
+            return await self.collection.count_documents(filter=query, session=session)
 
     async def exists(
         self,
@@ -305,8 +322,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         *,
         session: MongoAsyncClientSession | None = None,
     ) -> bool:
-        query = self.__prepare_query__(query)
-        return await self.collection.count_documents(filter=query, limit=1, session=session) == 1
+        return await self.count(query=query, session=session, limit=1) == 1
 
     @overload
     async def create(
