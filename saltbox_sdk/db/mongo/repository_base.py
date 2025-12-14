@@ -68,7 +68,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
 
         return query_overrides
 
-    def __prepare_query__(self, query: PyObjectId | dict[str, Any] | None) -> dict[str, Any]:
+    def __prepare_query__(self, query: PyObjectId | dict[str, Any] | None) -> dict[str, Any]:  # noqa: C901
         if isinstance(query, PyObjectId):
             return {'_id': query}
 
@@ -394,8 +394,6 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         session: MongoAsyncClientSession | None = None,
         projection_model: type[ProjectionModel] | None = None,
     ) -> T | ProjectionModel:
-        projection = self._get_projection_from_model(projection_model) if projection_model else None
-
         try:
             data = await self.validate_object_data(data)
         except ValueError as e:
