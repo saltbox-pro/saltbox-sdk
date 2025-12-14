@@ -91,6 +91,8 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
                     # TODO (i.moshkov): check if this is correct
                     elif isinstance(data_value, list) and data_key not in ['$in', '$nin']:
                         _query[data_key] = [recursive_override(item_value) for item_value in data_value]
+                    elif isinstance(data_value, PyObjectId):
+                        _query[data_key] = data_value
                     else:
                         try:
                             _query['$or'] = [{data_key: data_value}, {data_key: PyObjectId(data_value)}]
@@ -417,18 +419,16 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
             upsert=False,
             return_document=ReturnDocument.AFTER,
             session=session,
-            projection=projection,
+            projection={'_id': 1},
         )
 
         if result is None:
             raise ObjectUpdateException()
 
-        data = await self.prepare_object_data(data=result, projection_model=projection_model)
-
-        if projection_model is not None:
-            return projection_model.model_validate(data)
+        if projection_model:
+            return await self.get(PyObjectId(result['_id']), session=session, projection_model=projection_model)
         else:
-            return self.default_model.model_validate(data)
+            return await self.get(PyObjectId(result['_id']), session=session)
 
     async def delete(
         self,
