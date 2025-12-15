@@ -3,7 +3,9 @@ from inspect import isclass
 from typing import Any, ClassVar, TypeVar, cast, overload
 
 from pydantic import BaseModel
-from pymongo.asynchronous.client_session import AsyncClientSession as MongoAsyncClientSession
+from pymongo.asynchronous.client_session import (
+    AsyncClientSession as MongoAsyncClientSession,
+)
 from pymongo.asynchronous.collection import AsyncCollection, ReturnDocument
 from pymongo.asynchronous.command_cursor import AsyncCommandCursor
 from pymongo.asynchronous.cursor import AsyncCursor
@@ -12,7 +14,6 @@ from pymongo.asynchronous.mongo_client import AsyncMongoClient
 from pymongo.errors import DuplicateKeyError as MongoDuplicateKeyError
 from pymongo.errors import OperationFailure
 
-from saltbox_sdk.config.logger_config import logger
 from saltbox_sdk.db.abc_repository import AbstractRepository
 from saltbox_sdk.db.mongo.schemas_base import PyObjectId, SortOrder
 from saltbox_sdk.exceptions import (
@@ -63,12 +64,17 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         query_overrides = {}
 
         if hasattr(self.Meta, 'query_overrides') and self.Meta.query_overrides:
-            for override_name, override_callback_name in self.Meta.query_overrides.items():
+            for (
+                override_name,
+                override_callback_name,
+            ) in self.Meta.query_overrides.items():
                 query_overrides[override_name] = getattr(self, override_callback_name)
 
         return query_overrides
 
-    def __prepare_query__(self, query: PyObjectId | dict[str, Any] | None) -> dict[str, Any]:  # noqa: C901
+    def __prepare_query__(  # noqa: C901
+        self, query: PyObjectId | dict[str, Any] | None
+    ) -> dict[str, Any]:
         if isinstance(query, PyObjectId):
             return {'_id': query}
 
@@ -89,13 +95,19 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
                     if isinstance(data_value, dict):
                         _query[data_key] = recursive_override(data_value)
                     # TODO (i.moshkov): check if this is correct
-                    elif isinstance(data_value, list) and data_key not in ['$in', '$nin']:
+                    elif isinstance(data_value, list) and data_key not in [
+                        '$in',
+                        '$nin',
+                    ]:
                         _query[data_key] = [recursive_override(item_value) for item_value in data_value]
                     elif isinstance(data_value, PyObjectId):
                         _query[data_key] = data_value
                     else:
                         try:
-                            _query['$or'] = [{data_key: data_value}, {data_key: PyObjectId(data_value)}]
+                            _query['$or'] = [
+                                {data_key: data_value},
+                                {data_key: PyObjectId(data_value)},
+                            ]
                         except Exception:
                             _query[data_key] = data_value
             return _query
@@ -133,7 +145,9 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         return pipeline
 
     async def prepare_object_data(
-        self, data: dict[str, Any], projection_model: type[ProjectionModel] | None = None
+        self,
+        data: dict[str, Any],
+        projection_model: type[ProjectionModel] | None = None,
     ) -> dict[str, Any]:
         return data
 
@@ -278,7 +292,12 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         else:
             mongo_sort = [(field, order.value) for field, order in sort.items()] if sort else None
             result = self.collection.find(
-                filter=query, projection=projection, limit=limit, skip=skip, sort=mongo_sort, session=session
+                filter=query,
+                projection=projection,
+                limit=limit,
+                skip=skip,
+                sort=mongo_sort,
+                session=session,
             )
 
         if projection_model:
@@ -314,7 +333,11 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
 
             return int(result[0]['count'])
         else:
-            return await self.collection.count_documents(filter=query, session=session)
+            return await self.collection.count_documents(
+                filter=query,
+                session=session,
+                **({'limit': limit} if limit else {}),
+            )
 
     async def exists(
         self,
@@ -367,7 +390,6 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         try:
             result = await self.collection.insert_one(document=data, session=session)
         except MongoDuplicateKeyError as e:
-            logger.debug(f'{type(e.details)}')
             if e.details and 'keyValue' in e.details:
                 raise DuplicateKeyException(key_value=e.details['keyValue']) from None
             raise DuplicateKeyException(str(e)) from None
@@ -376,7 +398,11 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
             raise ObjectCreateException()
 
         if projection_model:
-            return await self.get(PyObjectId(result.inserted_id), session=session, projection_model=projection_model)
+            return await self.get(
+                PyObjectId(result.inserted_id),
+                session=session,
+                projection_model=projection_model,
+            )
         else:
             return await self.get(PyObjectId(result.inserted_id), session=session)
 
@@ -440,7 +466,11 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
             raise ObjectUpdateException()
 
         if projection_model:
-            return await self.get(PyObjectId(result['_id']), session=session, projection_model=projection_model)
+            return await self.get(
+                PyObjectId(result['_id']),
+                session=session,
+                projection_model=projection_model,
+            )
         else:
             return await self.get(PyObjectId(result['_id']), session=session)
 
