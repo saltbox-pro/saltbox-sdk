@@ -30,7 +30,7 @@ class MongoBaseWithNotifyService[
     @overload
     async def create(
         self,
-        data: CreateSchema,
+        data: CreateSchema | dict[str, Any],
         *,
         session: MongoAsyncClientSession | None = None,
         notify: bool = True,
@@ -39,7 +39,7 @@ class MongoBaseWithNotifyService[
     @overload
     async def create(
         self,
-        data: CreateSchema,
+        data: CreateSchema | dict[str, Any],
         *,
         session: MongoAsyncClientSession | None = None,
         projection_model: type[ProjectionModel],
@@ -49,7 +49,7 @@ class MongoBaseWithNotifyService[
     @override
     async def create(
         self,
-        data: CreateSchema,
+        data: CreateSchema | dict[str, Any],
         *,
         session: MongoAsyncClientSession | None = None,
         projection_model: type[ProjectionModel] | None = None,

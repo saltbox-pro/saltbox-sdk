@@ -95,7 +95,7 @@ class MongoBaseService[
     @overload
     async def create(
         self,
-        data: CreateSchema,
+        data: CreateSchema | dict[str, Any],
         *,
         session: MongoAsyncClientSession | None = None,
     ) -> ModelType: ...
@@ -103,7 +103,7 @@ class MongoBaseService[
     @overload
     async def create(
         self,
-        data: CreateSchema,
+        data: CreateSchema | dict[str, Any],
         *,
         session: MongoAsyncClientSession | None = None,
         projection_model: type[ProjectionModel],
@@ -111,7 +111,7 @@ class MongoBaseService[
 
     async def create(
         self,
-        data: CreateSchema,
+        data: CreateSchema | dict[str, Any],
         *,
         session: MongoAsyncClientSession | None = None,
         projection_model: type[ProjectionModel] | None = None,
