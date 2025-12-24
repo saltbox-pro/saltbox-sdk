@@ -16,6 +16,7 @@ from pymongo.errors import OperationFailure
 
 from saltbox_sdk.db.abc_repository import AbstractRepository
 from saltbox_sdk.db.mongo.schemas_base import PyObjectId, SortOrder
+from saltbox_sdk.db.mongo.utils import AggregationsStore
 from saltbox_sdk.exceptions import (
     DuplicateKeyException,
     MongoPipelineException,
@@ -37,7 +38,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         auto_now_add_fields: ClassVar[list[str]]
         auto_now_fields: ClassVar[list[str]]
         query_overrides: ClassVar[dict[str, str]]
-        joins: ClassVar[dict[str, list[Any]]] = {}
+        aggregations: ClassVar[AggregationsStore] = AggregationsStore()
 
     def __init__(self, database: MongoAsyncDatabase):
         super().__init__()
@@ -53,11 +54,11 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         return self.__database[self.Meta.collection_name]
 
     @property
-    def joins(self) -> dict[str, list[Any]]:
-        if hasattr(self.Meta, 'joins') and self.Meta.joins:
-            return self.Meta.joins
+    def aggregations(self) -> AggregationsStore:
+        if hasattr(self.Meta, 'aggregations') and self.Meta.aggregations:
+            return self.Meta.aggregations
 
-        return {}
+        return AggregationsStore()
 
     @property
     def __query_overrides__(self) -> dict[str, Callable]:
@@ -116,6 +117,16 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
 
         return cast(dict[str, Any], recursive_replace_dates(query))
 
+    async def prepare_aggregation_pipeline(
+        self,
+        projection: dict[str, Any],
+        query: dict[str, Any] | None = None,
+        limit: int | None = None,
+        skip: int | None = None,
+        sort: dict[str, SortOrder] | None = None,
+    ) -> list[dict]:
+        return self.aggregations.build_pipeline(fields_names=list(projection.keys()))
+
     async def prepare_pipline(
         self,
         projection: dict[str, Any],
@@ -124,11 +135,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         skip: int | None = None,
         sort: dict[str, SortOrder] | None = None,
     ) -> list[dict[str, Any]]:
-        pipeline: list[dict[str, Any]] = []
-
-        for field_key, _pipline in self.joins.items():
-            if any(field_key == s or f'{field_key}.' in s for s in projection.keys()):
-                pipeline += _pipline
+        pipeline: list[dict[str, Any]] = self.aggregations.build_pipeline(fields_names=list(projection.keys()))
 
         if pipeline:
             if query:
