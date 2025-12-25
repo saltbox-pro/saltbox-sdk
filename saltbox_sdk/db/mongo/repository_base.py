@@ -352,7 +352,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         *,
         session: MongoAsyncClientSession | None = None,
     ) -> bool:
-        return await self.count(query=query, session=session, limit=1) == 1
+        return await self.count(query=query, session=session, limit=1) >= 1
 
     @overload
     async def create(
