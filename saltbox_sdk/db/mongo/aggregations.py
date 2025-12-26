@@ -1,0 +1,123 @@
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from typing import Any
+
+
+class AbstractAggregationStage(ABC):
+    @abstractmethod
+    def render_stage(self) -> dict[str, Any]: ...
+
+
+class CustomAggregationStage(AbstractAggregationStage):
+    def __init__(self, stage: dict[str, Any]):
+        self.stage = stage
+
+    def render_stage(self) -> dict[str, Any]:
+        return self.stage
+
+
+class AddFieldsAggregationStage(AbstractAggregationStage):
+    def __init__(self, *, fields: dict[str, str | dict]) -> None:
+        self.fields = fields
+
+    def render_stage(self) -> dict[str, Any]:
+        return {'$addFields': self.fields}
+
+
+class LookupAggregationStage(AbstractAggregationStage):
+    def __init__(
+        self,
+        *,
+        from_collection: str,
+        local_field: str | None = None,
+        foreign_field: str | None = None,
+        let: dict[str, Any] | None = None,
+        pipeline: list[dict[str, Any]] | None = None,
+        as_field: str,
+    ) -> None:
+        self.from_collection = from_collection
+        self.local_field = local_field
+        self.foreign_field = foreign_field
+        self.let = let
+        self.pipeline = pipeline
+        self.as_field = as_field
+
+        if (self.local_field is None or self.foreign_field is None) and self.pipeline is None:
+            msg = 'Must specify "local_field" and "foreign_field" or "pipeline"'
+            raise ValueError(msg)
+
+    def render_stage(self) -> dict[str, Any]:
+        result: dict[str, Any] = {'from': self.from_collection, 'as': self.as_field}
+
+        if self.local_field is not None:
+            result['localField'] = self.local_field
+        if self.foreign_field is not None:
+            result['foreignField'] = self.foreign_field
+        if self.let is not None:
+            result['let'] = self.let
+        if self.pipeline is not None:
+            result['pipeline'] = self.pipeline
+
+        return {'$lookup': result}
+
+
+class UnwindAggregationStage(AbstractAggregationStage):
+    def __init__(
+        self,
+        *,
+        path: str,
+        include_array_index: str | None = None,
+        preserve_null_and_empty_arrays: bool = False,
+    ) -> None:
+        self.path = path
+        self.include_array_index = include_array_index
+        self.preserve_null_and_empty_arrays = preserve_null_and_empty_arrays
+
+        if self.include_array_index and self.include_array_index.startswith('$'):
+            msg = '"include_array_index" must start with "$"'
+            raise ValueError(msg)
+
+    def render_stage(self) -> dict[str, Any]:
+        result = {'path': self.path, 'preserveNullAndEmptyArrays': self.preserve_null_and_empty_arrays}
+
+        if self.include_array_index is not None:
+            result['includeArrayIndex'] = self.include_array_index
+
+        return {'$unwind': result}
+
+
+@dataclass
+class AggregatedField:
+    field_name: str
+    stages: list[AbstractAggregationStage]
+    parent_aggregations: list[str] = field(default_factory=list)
+
+
+class AggregationsStore:
+    def __init__(self, aggregations: list[AggregatedField] | None = None):
+        if aggregations is None:
+            aggregations = []
+
+        self.__aggregations: dict[str, AggregatedField] = {
+            aggregation.field_name: aggregation for aggregation in aggregations
+        }
+
+    def __get_pipeline(self, field_name: str, pipeline: list[dict]) -> None:
+        aggregation = self.__aggregations[field_name]
+
+        for parent_aggregation in aggregation.parent_aggregations:
+            self.__get_pipeline(parent_aggregation, pipeline)
+
+        for stage in aggregation.stages:
+            rendered_stage = stage.render_stage()
+            if rendered_stage not in pipeline:
+                pipeline.append(rendered_stage)
+
+    def build_pipeline(self, fields_names: list[str]) -> list[dict]:
+        pipeline: list[dict] = []
+
+        for field_key in self.__aggregations.keys():
+            if any(field_key == field_name or f'{field_key}.' in field_name for field_name in fields_names):
+                self.__get_pipeline(field_key, pipeline)
+
+        return pipeline

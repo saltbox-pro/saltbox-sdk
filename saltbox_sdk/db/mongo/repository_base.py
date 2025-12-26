@@ -15,8 +15,8 @@ from pymongo.errors import DuplicateKeyError as MongoDuplicateKeyError
 from pymongo.errors import OperationFailure
 
 from saltbox_sdk.db.abc_repository import AbstractRepository
+from saltbox_sdk.db.mongo.aggregations import AggregationsStore
 from saltbox_sdk.db.mongo.schemas_base import PyObjectId, SortOrder
-from saltbox_sdk.db.mongo.utils import AggregationsStore
 from saltbox_sdk.exceptions import (
     DuplicateKeyException,
     MongoPipelineException,
