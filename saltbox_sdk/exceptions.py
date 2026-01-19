@@ -1,3 +1,5 @@
+from typing import Any
+
 from saltbox_sdk.utilities import status
 
 
@@ -24,6 +26,12 @@ class SaltBoxBaseException(Exception):
 
     def __str__(self) -> str:
         return f'{self.__class__.__name__}: {self.detail}'
+
+    def get_extra_fields(self) -> dict[str, Any]:
+        return {
+            attr: getattr(self, attr, '** MISSING FIELD **')
+            for attr in self.extra_fields
+        }
 
 
 class SaltBoxValidationException(SaltBoxBaseException):

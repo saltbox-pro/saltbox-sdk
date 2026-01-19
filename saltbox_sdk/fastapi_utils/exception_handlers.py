@@ -28,7 +28,7 @@ async def custom_http_handler(_: Request, exc: Exception) -> JSONResponse:  # no
 
     extra_fields = {}
     if isinstance(exc, SaltBoxBaseException):
-        extra_fields = {attr: getattr(exc, attr, '** MISSING VALUE **') for attr in exc.extra_fields}
+        extra_fields = exc.get_extra_fields()
 
     exc_type_str = exc.__class__.__name__
     logger.exception('%s: %s', exc_type_str, getattr(exc, 'detail', str(exc)))
