@@ -1,3 +1,4 @@
+import re
 from collections.abc import Callable
 from inspect import isclass
 from typing import Any, ClassVar, TypeVar, cast, overload
@@ -13,7 +14,9 @@ from pymongo.asynchronous.database import AsyncDatabase as MongoAsyncDatabase
 from pymongo.asynchronous.mongo_client import AsyncMongoClient
 from pymongo.errors import DuplicateKeyError as MongoDuplicateKeyError
 from pymongo.errors import OperationFailure
+from pymongo.operations import _IndexKeyHint  # pyright: ignore[reportPrivateUsage]
 
+from saltbox_sdk.config.logger_config import logger
 from saltbox_sdk.db.abc_repository import AbstractRepository
 from saltbox_sdk.db.mongo.aggregations import AggregationsStore
 from saltbox_sdk.db.mongo.schemas_base import PyObjectId, SortOrder
@@ -33,24 +36,26 @@ ModelType = TypeVar('ModelType', bound=BaseModel)
 
 
 class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
+
     class Meta:
         collection_name: ClassVar[str]
         auto_now_add_fields: ClassVar[list[str]]
         auto_now_fields: ClassVar[list[str]]
         query_overrides: ClassVar[dict[str, str]]
         aggregations: ClassVar[AggregationsStore] = AggregationsStore()
+        collection_index_to_keys: ClassVar[dict[str, _IndexKeyHint]]
 
-    def __init__(self, database: MongoAsyncDatabase):
+    def __init__(self, database: MongoAsyncDatabase[Any], **kwargs: Any) -> None:
         super().__init__()
-        self.__database: MongoAsyncDatabase = database
+        self.__database: MongoAsyncDatabase[Any] = database
         self.__validate()
 
     @property
-    def client(self) -> AsyncMongoClient:
+    def client(self) -> AsyncMongoClient[Any]:
         return self.__database.client
 
     @property
-    def collection(self) -> AsyncCollection:
+    def collection(self) -> AsyncCollection[Any]:
         return self.__database[self.Meta.collection_name]
 
     @property
@@ -135,7 +140,8 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         skip: int | None = None,
         sort: dict[str, SortOrder] | None = None,
     ) -> list[dict[str, Any]]:
-        pipeline: list[dict[str, Any]] = self.aggregations.build_pipeline(fields_names=list(projection.keys()))
+
+        pipeline: list[dict[str, Any]] = await self.prepare_aggregation_pipeline(projection, query, limit, skip, sort)
 
         if pipeline:
             if query:
@@ -171,19 +177,24 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         if 'id' not in self.default_model.model_fields:
             msg = 'Document class should have `id` field'
             raise SaltBoxValidationException(msg)
+
         if not hasattr(self.Meta, 'collection_name') or not self.Meta.collection_name:
             msg = 'Meta should contain `collection_name`'
             raise SaltBoxValidationException(msg)
+
         if hasattr(self.Meta, 'auto_now_add_fields') and self.Meta.auto_now_add_fields:
             for field in self.Meta.auto_now_add_fields:
                 if field not in self.default_model.model_fields:
                     msg = f'Meta `auto_now_add_fields` `{field}` should be in model fields'
-                    raise SaltBoxValidationException(msg.format(field, self.Meta.collection_name))
+                    pretty_msg = msg.format(field, self.Meta.collection_name)
+                    raise SaltBoxValidationException(pretty_msg)
+
         if hasattr(self.Meta, 'auto_now_fields') and self.Meta.auto_now_fields:
             for field in self.Meta.auto_now_fields:
                 if field not in self.default_model.model_fields:
                     msg = f'Meta `auto_now_fields` `{field}` should be in model fields'
-                    raise SaltBoxValidationException(msg.format(field, self.Meta.collection_name))
+                    pretty_msg = msg.format(field, self.Meta.collection_name)
+                    raise SaltBoxValidationException(pretty_msg)
 
     @classmethod
     def _get_projection_from_model(cls, model: type[BaseModel], path: list | None = None) -> dict[str, Any]:
@@ -520,3 +531,43 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         except OperationFailure as e:
             msg = f'Error during pipeline execution in aggregate: {e}'
             raise MongoPipelineException(msg) from None
+
+    async def create_collection(self) -> None:
+
+        collection_name = self.__class__.__name__
+        indexes: dict[str, _IndexKeyHint] = self.Meta.collection_index_to_keys
+
+        if not indexes:
+            await self._post_create_collection()
+            return
+
+        msg = f'Try to create `{collection_name}`'
+        logger.debug(msg)
+
+        msg = f'Expected indexes in `{collection_name}`: {list(indexes.keys())}'
+        logger.debug(msg)
+
+        existing_indexes = sorted(await self.collection.index_information())
+        msg = f'Existing indexes from `{collection_name}`: {existing_indexes}'
+        logger.debug(msg)
+
+        created = 0
+        for expected_index, keys in indexes.items():
+            if expected_index not in existing_indexes:
+                _ = await self.collection.create_index(
+                    keys,
+                    name=expected_index,
+                    unique=bool(re.search('unique', expected_index))
+                )
+                created += 1
+                msg = f'Missing `{expected_index}` index has been created'
+                logger.debug(msg)
+
+        if not created:
+            msg = f'`{collection_name}` already exists.'
+            logger.debug(msg)
+
+        await self._post_create_collection()
+
+    async def _post_create_collection(self) -> None:
+        ...
