@@ -146,3 +146,7 @@ class TaskiqTimeoutException(TaskiqException):
 
     status_code: int = status.HTTP_408_REQUEST_TIMEOUT
     detail: str = 'The Taskiq operation timed out.'
+
+
+class MigrationDependencuNotAppliedException(SaltBoxBaseException):
+    detail: str = 'Migration dependecies are not applied'

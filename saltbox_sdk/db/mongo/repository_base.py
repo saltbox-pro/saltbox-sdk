@@ -51,6 +51,10 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         self.__validate()
 
     @property
+    def database(self) -> MongoAsyncDatabase[Any]:
+        return self.__database
+
+    @property
     def client(self) -> AsyncMongoClient[Any]:
         return self.__database.client
 

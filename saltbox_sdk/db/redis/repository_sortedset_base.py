@@ -31,7 +31,7 @@ class SortedsetRedisRepository[T: BaseModel](AbstractRepository[T]):
 
     def __init__(self, database: Redis):
         super().__init__()
-        self._database: Redis = database
+        self.database: Redis = database
         self.__validate()
 
     def __validate(self) -> None:
@@ -70,7 +70,7 @@ class SortedsetRedisRepository[T: BaseModel](AbstractRepository[T]):
         if type(query) in [int, float]:
             query = str(query)
 
-        result = await self._database.zrange(
+        result = await self.database.zrange(
             name=self.Meta.collection_name,
             start=query,  # type: ignore
             end=query,  # type: ignore
@@ -94,7 +94,7 @@ class SortedsetRedisRepository[T: BaseModel](AbstractRepository[T]):
         self, cursor: int = 0, match: str | None = None, count: int | None = None
     ) -> tuple[int, list[tuple[str, float]]]:
         try:
-            return await self._database.zscan(name=self.Meta.collection_name, cursor=cursor, match=match, count=count)
+            return await self.database.zscan(name=self.Meta.collection_name, cursor=cursor, match=match, count=count)
         except RedisResponseError as e:
             if 'invalid cursor' in str(e):
                 msg = f'Invalid cursor: {cursor}'
@@ -124,7 +124,7 @@ class SortedsetRedisRepository[T: BaseModel](AbstractRepository[T]):
         desc: bool = False,
         projection_model: type[ProjectionModel] | None = None,
     ) -> list[T] | list[ProjectionModel]:
-        result_ = await self._database.zrange(
+        result_ = await self.database.zrange(
             name=self.Meta.collection_name,
             start=start,
             end=-1 if end is None else end,
@@ -148,14 +148,14 @@ class SortedsetRedisRepository[T: BaseModel](AbstractRepository[T]):
         start = start or float('-inf')
         end = end or float('inf')
 
-        return await self._database.zcount(
+        return await self.database.zcount(
             name=self.Meta.collection_name,
             min=min(start, end),
             max=max(start, end),
         )
 
     async def exists(self, query: SortedSetId) -> bool:
-        return await self._database.zcount(name=self.Meta.collection_name, min=int(query), max=int(query)) == 1
+        return await self.database.zcount(name=self.Meta.collection_name, min=int(query), max=int(query)) == 1
 
     @overload
     async def create(self, data: ModelType | dict[str, Any]) -> T: ...
@@ -185,7 +185,7 @@ class SortedsetRedisRepository[T: BaseModel](AbstractRepository[T]):
             for field in self.Meta.auto_now_fields:
                 data[field] = datetime.now(UTC).timestamp()
 
-        await self._database.zadd(
+        await self.database.zadd(
             name=self.Meta.collection_name,
             mapping={json.dumps(data): obj_id},
         )
@@ -230,7 +230,7 @@ class SortedsetRedisRepository[T: BaseModel](AbstractRepository[T]):
         await self.get(query=query)
         await self.delete(query=query)
 
-        updated_count = await self._database.zadd(
+        updated_count = await self.database.zadd(
             name=self.Meta.collection_name,
             mapping={json.dumps(data): int(query)},
         )
@@ -245,6 +245,6 @@ class SortedsetRedisRepository[T: BaseModel](AbstractRepository[T]):
 
     async def delete(self, query: SortedSetId) -> int:
         await self.get(query=query)
-        await self._database.zrem(self.Meta.collection_name, query)
+        await self.database.zrem(self.Meta.collection_name, query)
 
         return 1
