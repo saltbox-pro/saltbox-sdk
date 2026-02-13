@@ -1,15 +1,15 @@
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class ProxyBalancingStrategy(str, Enum):
+class ProxyBalancingStrategy(StrEnum):
     RANDOM = 'rand'
     ROUND_ROBIN = 'rr'
     WEIGHTED_ROUND_ROBIN = 'wrr'
 
 
-class ServiceType(str, Enum):
+class ServiceType(StrEnum):
     OFFICIAL = 'official'
     THIRD_PARTY = 'third-party'
 
@@ -21,7 +21,7 @@ class HealthCheckResponse(BaseModel):
     message: str | None = None
 
 
-class OPAQueryFilterFormat(str, Enum):
+class OPAQueryFilterFormat(StrEnum):
     MONGO = 'mongo'
     SQL = 'sql'
 
@@ -63,7 +63,7 @@ class ServiceEndpoint(BaseModel):
     cache_ttl: int = 0
 
 
-class ServiceStatus(str, Enum):
+class ServiceStatus(StrEnum):
     RUNNING = 'running'
     STOPPED = 'stopped'
     ERROR = 'error'

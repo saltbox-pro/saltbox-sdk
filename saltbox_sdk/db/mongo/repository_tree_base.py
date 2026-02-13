@@ -139,6 +139,46 @@ class BaseTreeMongoRepository[T: BaseModel](BaseMongoRepository[T]):
         except ObjectNotFoundException:
             return None
 
+    async def get_tree(
+        self,
+        query: dict[str, Any] | None = None,
+        *,
+        session: MongoAsyncClientSession | None = None,
+        projection_model: type[ProjectionModel],
+        children_field_name: str = 'children',
+        node_id_field_name: str = 'id',
+        parent_id_field_name: str = 'parent_id',
+    ) -> list[ProjectionModel]:
+        nodes = await self.get_list(query=query, skip=0, limit=0, session=session, projection_model=projection_model)
+        nodes_id = [getattr(node, node_id_field_name) for node in nodes]
+        tree: list[ProjectionModel] = []
+
+        def add_node_recursive(new_node: ProjectionModel, parent_node: ProjectionModel) -> bool:
+            if getattr(parent_node, node_id_field_name) == getattr(new_node, parent_id_field_name):
+                getattr(parent_node, children_field_name).append(new_node)
+                return True
+
+            for child_node in getattr(parent_node, children_field_name, []):
+                if add_node_recursive(new_node, child_node):
+                    return True
+
+            return False
+
+        while len(nodes) > 0:
+            node = nodes.pop(0)
+
+            if getattr(node, parent_id_field_name, None) not in nodes_id:
+                tree.append(node)
+                continue
+
+            for tree_node in tree:
+                if add_node_recursive(node, tree_node):
+                    break
+
+                nodes.append(node)
+
+        return tree
+
     async def delete(
         self,
         query: PyObjectId | dict[str, Any],

@@ -36,7 +36,6 @@ ModelType = TypeVar('ModelType', bound=BaseModel)
 
 
 class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
-
     class Meta:
         collection_name: ClassVar[str]
         auto_now_add_fields: ClassVar[list[str]]
@@ -140,7 +139,6 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         skip: int | None = None,
         sort: dict[str, SortOrder] | None = None,
     ) -> list[dict[str, Any]]:
-
         pipeline: list[dict[str, Any]] = await self.prepare_aggregation_pipeline(projection, query, limit, skip, sort)
 
         if pipeline:
@@ -320,11 +318,17 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
 
         if projection_model:
             return [
-                projection_model.model_validate(await self.prepare_object_data(doc)) for doc in await result.to_list()
+                projection_model.model_validate(
+                    await self.prepare_object_data(data=doc, projection_model=projection_model)
+                )
+                for doc in await result.to_list()
             ]
         else:
             return [
-                self.default_model.model_validate(await self.prepare_object_data(doc)) for doc in await result.to_list()
+                self.default_model.model_validate(
+                    await self.prepare_object_data(data=doc, projection_model=self.default_model)
+                )
+                for doc in await result.to_list()
             ]
 
     async def count(
@@ -533,7 +537,6 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
             raise MongoPipelineException(msg) from None
 
     async def create_collection(self) -> None:
-
         collection_name = self.__class__.__name__
         indexes: dict[str, _IndexKeyHint] = self.Meta.collection_index_to_keys
 
@@ -555,9 +558,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         for expected_index, keys in indexes.items():
             if expected_index not in existing_indexes:
                 _ = await self.collection.create_index(
-                    keys,
-                    name=expected_index,
-                    unique=bool(re.search('unique', expected_index))
+                    keys, name=expected_index, unique=bool(re.search('unique', expected_index))
                 )
                 created += 1
                 msg = f'Missing `{expected_index}` index has been created'
@@ -569,5 +570,4 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
 
         await self._post_create_collection()
 
-    async def _post_create_collection(self) -> None:
-        ...
+    async def _post_create_collection(self) -> None: ...
