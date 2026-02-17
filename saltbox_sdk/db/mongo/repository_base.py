@@ -144,12 +144,12 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         if pipeline:
             if query:
                 pipeline.append({'$match': query})
+            if sort:
+                pipeline.append({'$sort': dict(sort)})
             if skip:
                 pipeline.append({'$skip': skip})
             if limit:
                 pipeline.append({'$limit': limit})
-            if sort:
-                pipeline.append({'$sort': dict(sort)})
 
             pipeline.append({'$project': projection})
 
