@@ -131,7 +131,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
     ) -> list[dict]:
         return self.aggregations.build_pipeline(fields_names=list(projection.keys()))
 
-    async def prepare_pipline(
+    async def prepare_pipeline(
         self,
         projection: dict[str, Any],
         query: dict[str, Any] | None = None,
@@ -243,7 +243,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         else:
             projection = self._get_projection_from_model(self.default_model)
         query = self.__prepare_query__(query)
-        pipeline = await self.prepare_pipline(projection, query)
+        pipeline = await self.prepare_pipeline(projection, query)
 
         if pipeline:
             result = await (await self.collection.aggregate(pipeline=pipeline, session=session)).to_list()
@@ -300,7 +300,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         else:
             projection = self._get_projection_from_model(self.default_model)
         query = self.__prepare_query__(query)
-        pipeline = await self.prepare_pipline(projection, query, limit, skip, sort)
+        pipeline = await self.prepare_pipeline(projection, query, limit, skip, sort)
 
         result: AsyncCursor[Any] | AsyncCommandCursor[Any]
         if pipeline:
@@ -340,7 +340,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
     ) -> int:
         query = self.__prepare_query__(query)
         projection = self._get_projection_from_model(self.default_model)
-        pipeline = await self.prepare_pipline(projection, query)
+        pipeline = await self.prepare_pipeline(projection, query)
 
         if pipeline:
             pipeline.append({'$count': 'count'})
