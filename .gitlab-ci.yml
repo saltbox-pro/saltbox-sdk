@@ -1,7 +1,12 @@
 ---
 
 stages:
+  - .guard
   - lint
+
+include:
+  - project: 'saltbox/ci-lib'
+    file: 'def-branch-merge-guard.yml'
 
 ruff:
   stage: lint
