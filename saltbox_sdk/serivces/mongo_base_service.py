@@ -67,8 +67,8 @@ class MongoBaseService[
     async def get_list(
         self,
         query: Any,
-        limit: int,
-        skip: int,
+        limit: int = 0,
+        skip: int = 0,
         *,
         session: MongoAsyncClientSession | None = None,
         projection_model: type[ProjectionModel] = StubDefault,
