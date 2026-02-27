@@ -15,7 +15,7 @@ class _MongoClientSingleton:
         if not hasattr(cls, 'instance'):
             cls.instance = super().__new__(cls)
             cls.instance.mongo_client = AsyncMongoClient(MONGO_SETTINGS.mongo_url)
-            logger.debug('Mongo initialized')
+            logger.debug('Mongo client initialized')
         return cls.instance
 
 

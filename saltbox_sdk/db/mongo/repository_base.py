@@ -129,7 +129,23 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         skip: int | None = None,
         sort: dict[str, SortOrder] | None = None,
     ) -> list[dict]:
-        return self.aggregations.build_pipeline(fields_names=list(projection.keys()))
+        fields_names = list(projection.keys())
+
+        def extract_fields_names_from_query(_query: dict[str, Any]) -> list[str]:
+            res = []
+
+            for field_name, field_value in _query.items():
+                if field_name.startswith('$') and isinstance(field_value, dict):
+                    res.extend(extract_fields_names_from_query(field_value))
+                else:
+                    res.append(field_name)
+
+            return res
+
+        if query:
+            fields_names.extend(extract_fields_names_from_query(query))
+
+        return self.aggregations.build_pipeline(fields_names=fields_names)
 
     async def prepare_pipeline(
         self,
