@@ -94,7 +94,7 @@ class DiscoveryClient:
             id=DISCOVERY_SETTINGS.instance_id,
             host=host,
             port=DISCOVERY_SETTINGS.instance_port,
-            base_route='',
+            base_route=DISCOVERY_SETTINGS.instance_base_route,
             version=__version__,
             healthcheck_path=self._healthcheck_path,
             docs_path=self._docs_path,

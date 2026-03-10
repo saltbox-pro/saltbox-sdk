@@ -22,6 +22,7 @@ class DiscoverySettings(BaseSettings):
     instance_id: str = Field(default_factory=lambda: uuid4().hex)
     instance_host: str
     instance_port: int
+    instance_base_route: str = ''
     front_container_name: str
     front_container_port: int
 
