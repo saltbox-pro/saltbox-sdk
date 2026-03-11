@@ -97,7 +97,9 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
                     if override_value is not None:
                         _query[override_key] = override_value
                 else:
-                    if isinstance(data_value, dict):
+                    if data_value is None:
+                        _query[data_key] = data_key
+                    elif isinstance(data_value, dict):
                         _query[data_key] = recursive_override(data_value)
                     # TODO (i.moshkov): check if this is correct
                     elif isinstance(data_value, list) and data_key not in [
