@@ -179,6 +179,38 @@ class BaseTreeMongoRepository[T: BaseModel](BaseMongoRepository[T]):
 
         return tree
 
+    async def get_ancestors_ids(
+        self,
+        target: PyObjectId | ModelType,
+        include_self: bool = False,
+        *,
+        session: MongoAsyncClientSession | None = None,
+    ) -> list[PyObjectId]:
+        """Get ancestors ids list for target. If `include_self` is True, target id will be included.
+        Ancestors will be ordered from root to direct parent (and to target if `include_self` is True).
+        """
+        ancestors_ids: list[PyObjectId] = []
+        if include_self:
+            if isinstance(target, BaseModel):
+                if hasattr(target, 'id'):
+                    ancestors_ids.append(PyObjectId(target.id))
+                else:
+                    msg = 'Target must be have "id" field"'
+                    raise SaltBoxValidationException(msg)
+            elif isinstance(target, PyObjectId):
+                ancestors_ids.append(target)
+            else:
+                msg = 'Unknown target type'  # type: ignore
+                raise SaltBoxValidationException(msg)
+
+        parent_id = await self.get_parent_id(target, session=session)
+
+        while parent_id is not None:
+            ancestors_ids.insert(0, parent_id)
+            parent_id = await self.get_parent_id(parent_id, session=session)
+
+        return ancestors_ids
+
     async def delete(
         self,
         query: PyObjectId | dict[str, Any],
@@ -199,7 +231,7 @@ class BaseTreeMongoRepository[T: BaseModel](BaseMongoRepository[T]):
         obj = BaseTreeModel.model_validate(find_result[0])
 
         if self.Meta.on_delete == OnDelete.protected:
-            if self.exists({'parent_id': obj.id}):
+            if await self.exists({'parent_id': obj.id}, session=session):
                 raise ObjectDeleteException(detail='The object cannot be deleted because it has child elements')
         elif self.Meta.on_delete == OnDelete.cascade:
             for child in await self.get_children(target=obj, projection_model=BaseTreeModel, session=session):
