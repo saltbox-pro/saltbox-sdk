@@ -13,6 +13,7 @@ class MongoSettings(BaseSettings):
     mongo_port: int = 27017
     mongo_user: str = ''
     mongo_replicaset: str | None = None
+    mongo_explain: bool = False
 
     @property
     def mongo_url(self) -> str:

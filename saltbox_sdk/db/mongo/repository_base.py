@@ -17,6 +17,7 @@ from pymongo.errors import OperationFailure
 from pymongo.operations import _IndexKeyHint  # pyright: ignore[reportPrivateUsage]
 
 from saltbox_sdk.config.logger_config import logger
+from saltbox_sdk.config.mongo_config import MONGO_SETTINGS
 from saltbox_sdk.db.abc_repository import AbstractRepository
 from saltbox_sdk.db.mongo.aggregations import AggregationsStore
 from saltbox_sdk.db.mongo.schemas_base import PyObjectId, SortOrder
@@ -264,9 +265,20 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         pipeline = await self.prepare_pipeline(projection, query)
 
         if pipeline:
+            if MONGO_SETTINGS.mongo_explain:
+                explanation = await self.__database.command(
+                    'aggregate', self.Meta.collection_name, pipeline=pipeline, explain=True
+                )
+                logger.debug(explanation)
+
             result = await (await self.collection.aggregate(pipeline=pipeline, session=session)).to_list()
         else:
-            result = await self.collection.find(filter=query, projection=projection, session=session).to_list()
+            cursor = self.collection.find(filter=query, projection=projection, session=session)
+
+            if MONGO_SETTINGS.mongo_explain:
+                logger.debug(await cursor.explain())
+
+            result = await cursor.to_list()
 
         if len(result) == 0:
             raise ObjectNotFoundException(obj_type=self.Meta.collection_name, query=query)
@@ -320,12 +332,18 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         query = self.__prepare_query__(query)
         pipeline = await self.prepare_pipeline(projection, query, limit, skip, sort)
 
-        result: AsyncCursor[Any] | AsyncCommandCursor[Any]
+        cursor: AsyncCursor[Any] | AsyncCommandCursor[Any]
         if pipeline:
-            result = await self.collection.aggregate(pipeline=pipeline, session=session)
+            if MONGO_SETTINGS.mongo_explain:
+                explanation = await self.__database.command(
+                    'aggregate', self.Meta.collection_name, pipeline=pipeline, explain=True
+                )
+                logger.debug(explanation)
+
+            cursor = await self.collection.aggregate(pipeline=pipeline, session=session)
         else:
             mongo_sort = [(field, order.value) for field, order in sort.items()] if sort else None
-            result = self.collection.find(
+            cursor = self.collection.find(
                 filter=query,
                 projection=projection,
                 limit=limit,
@@ -334,19 +352,23 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
                 session=session,
             )
 
+            if MONGO_SETTINGS.mongo_explain:
+                explanation = await cursor.explain()
+                logger.warning(explanation)
+
         if projection_model:
             return [
                 projection_model.model_validate(
                     await self.prepare_object_data(data=doc, projection_model=projection_model)
                 )
-                for doc in await result.to_list()
+                for doc in await cursor.to_list()
             ]
         else:
             return [
                 self.default_model.model_validate(
                     await self.prepare_object_data(data=doc, projection_model=self.default_model)
                 )
-                for doc in await result.to_list()
+                for doc in await cursor.to_list()
             ]
 
     async def count(
