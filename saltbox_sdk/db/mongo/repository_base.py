@@ -20,7 +20,7 @@ from saltbox_sdk.config.logger_config import logger
 from saltbox_sdk.config.mongo_config import MONGO_SETTINGS
 from saltbox_sdk.db.abc_repository import AbstractRepository
 from saltbox_sdk.db.mongo.aggregations import AggregationsStore
-from saltbox_sdk.db.mongo.schemas_base import PyObjectId, SortOrder
+from saltbox_sdk.db.mongo.schemas_base import EmptyModel, PyObjectId, SortOrder
 from saltbox_sdk.exceptions import (
     DuplicateKeyException,
     MongoPipelineException,
@@ -354,7 +354,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
 
             if MONGO_SETTINGS.mongo_explain:
                 explanation = await cursor.explain()
-                logger.warning(explanation)
+                logger.debug(explanation)
 
         if projection_model:
             return [
@@ -379,7 +379,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         limit: int | None = None,
     ) -> int:
         query = self.__prepare_query__(query)
-        projection = self._get_projection_from_model(self.default_model)
+        projection = self._get_projection_from_model(EmptyModel)
         pipeline = await self.prepare_pipeline(projection, query)
 
         if pipeline:
