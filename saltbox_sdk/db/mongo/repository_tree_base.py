@@ -203,11 +203,17 @@ class BaseTreeMongoRepository[T: BaseModel](BaseMongoRepository[T]):
                 msg = 'Unknown target type'  # type: ignore
                 raise SaltBoxValidationException(msg)
 
-        parent_id = await self.get_parent_id(target, session=session)
+        try:
+            parent_id = await self.get_parent_id(target, session=session)
+        except ObjectNotFoundException:
+            return ancestors_ids
 
         while parent_id is not None:
             ancestors_ids.insert(0, parent_id)
-            parent_id = await self.get_parent_id(parent_id, session=session)
+            try:
+                parent_id = await self.get_parent_id(parent_id, session=session)
+            except ObjectNotFoundException:
+                break
 
         return ancestors_ids
 
