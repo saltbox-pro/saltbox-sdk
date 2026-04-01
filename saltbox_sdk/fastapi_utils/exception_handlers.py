@@ -13,7 +13,7 @@ from saltbox_sdk.exceptions import SaltBoxBaseException
 
 def convert_objectids(obj: Any) -> Any:
     if ObjectId is None:
-        return obj  # type: ignore[unreachable]
+        return obj
     if isinstance(obj, ObjectId):
         return str(obj)
     if isinstance(obj, dict):

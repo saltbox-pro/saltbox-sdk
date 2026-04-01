@@ -1,5 +1,6 @@
 from collections.abc import AsyncGenerator, Generator
 from contextlib import asynccontextmanager
+from typing import ClassVar
 
 from pymongo import AsyncMongoClient, MongoClient, ReadPreference, WriteConcern
 from pymongo.asynchronous.client_session import AsyncClientSession
@@ -12,13 +13,15 @@ from saltbox_sdk.config.mongo_config import MONGO_SETTINGS
 
 
 class _MongoClientSingleton:
+    instance: ClassVar['_MongoClientSingleton | None'] = None
     mongo_client: AsyncMongoClient | None
 
     def __new__(cls) -> '_MongoClientSingleton':
-        if not hasattr(cls, 'instance'):
+        if cls.instance is None:
             cls.instance = super().__new__(cls)
             cls.instance.mongo_client = AsyncMongoClient(MONGO_SETTINGS.mongo_url)
             logger.debug('Mongo client initialized')
+
         return cls.instance
 
 
