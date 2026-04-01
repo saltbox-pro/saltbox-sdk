@@ -22,16 +22,18 @@ class _MongoClientSingleton:
         return cls.instance
 
 
-def get_mongo_db(db_name: str = MONGO_SETTINGS.mongo_db) -> MongoAsyncDatabase:
+def _get_mongo_client() -> AsyncMongoClient:
     client = _MongoClientSingleton().mongo_client
 
     if client is None:
         msg = 'Mongo client is not initialized'
         raise ValueError(msg)
 
-    mongo_db = client[db_name]
+    return client
 
-    return mongo_db
+
+def get_mongo_db(db_name: str = MONGO_SETTINGS.mongo_db) -> MongoAsyncDatabase:
+    return _get_mongo_client()[db_name]
 
 
 # TODO (a.baikov): Should we use generator
@@ -50,17 +52,19 @@ def get_sync_mongo_db(db_name: str = MONGO_SETTINGS.mongo_db) -> MongoSyncDataba
 
 
 @asynccontextmanager
-async def get_mongo_session_with_transaction() -> AsyncGenerator[AsyncClientSession, None]:
-    client = _MongoClientSingleton().mongo_client
+async def get_mongo_session_with_transaction(
+    session: AsyncClientSession | None = None,
+) -> AsyncGenerator[AsyncClientSession, None]:
+    if session is not None and session.in_transaction:
+        yield session
+        return
 
-    if client is None:
-        msg = 'Mongo client is not initialized'
-        raise ValueError(msg)
+    mongo_session = session or _get_mongo_client().start_session()
 
-    async with client.start_session() as session:
-        async with await session.start_transaction(
+    async with mongo_session as session_with_transaction:
+        async with await session_with_transaction.start_transaction(
             read_concern=ReadConcern('snapshot'),
             write_concern=WriteConcern('majority'),
             read_preference=ReadPreference.PRIMARY,
         ):
-            yield session
+            yield session_with_transaction
