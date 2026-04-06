@@ -19,6 +19,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add a JSON validator utility to centralize JSON schema/validation checks.
 - Add FastAPI metrics: error request counter, aggregated metrics, and merged method/route metric labels.
 - Add initial Inventory-related types to support upcoming inventory persistence and typing.
+- Add data migrations framework and related migration types.
+- Add mongo transactions support, including session and transaction helpers.
+- Add mongo base service with notification.
+- Add `EmptyModel`.
+- Add `Source` base model.
+- Add `SaltBoxBaseException.get_extra_fields()` helper.
+- Add `QueryParams` and `SortParams` schemas.
+- Add common aggregation stage classes.
+- Add joins support in mongo repositories.
+- Add `get_tree` to `BaseTreeMongoRepository`.
+- Add method to retrieve ancestor IDs for a target.
+- Add logic to create mongo collections.
+- Add updating mongo document by `find_one_and_update`.
+- Add `projection_model` to `prepare_object_data` in `BaseMongoRepository`.
+- Add `is_available` field to `ServiceFrontendConfig`.
+- Add `is_external` flag to `DiscoverySettings`.
+- Add `instance_base_route` to `DiscoverySettings`.
+- Add merge guard to prevent unintended merges.
 
 ### Changed
 
@@ -30,12 +48,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refactor `get_current_user` to read headers from the `Request` object and simplify auth header handling.
 - Improve typing and overrides for `MongoBaseService.get_list()` and update sorting logic to use the new `SortOrder` type.
 - Add `mongo_host` to `MongoSettings` and update logger configuration (`LoggerSettings.model_config`) to ignore extra fields.
+- Refactor MongoDB client retrieval, singleton behavior, and session management.
+- Add an option to allow MongoDB `replicaSet` to be unset in configuration.
+- Refactor mongo repository joins.
+- Refactor query preparation and improve readability.
+- Use mongo pipelines in `count` and `exists` in `BaseMongoRepository` when applicable.
+- Add recursion to `BaseMongoRepository._get_projection_from_model`.
+- Refactor MongoDB imports and remove unused aliases.
+- Update sortedset repository base class.
+- Refactor `DiscoveryClient` to manage `httpx` client lifecycle.
+- Update CI stages due to `ci-lib` changes.
+- Add explanation/documentation for mongo internals.
+- Update typing for `data` argument of service `create` methods to `dict`.
+- Add migration stages for mongo collections.
 
 ### Fixed
 
 - Raise a `ValueError` on invalid cursor values in `zscan` to prevent silent failures.
 - Fix potential timestamps inconsistency in persistence logic to ensure stable ordering of time-based fields.
 - Improve ObjectId conversion and exception handling in utility functions to avoid masking original errors.
+- Fix `repo.count()` optimization.
+- Handle `ObjectNotFoundException` in `get_parent_id`.
+- Fix preparing mongo query when a value is `None`.
+- Fix `MongoBaseService.get_list` interface.
+- Fix `prepare_pipeline` method naming.
+- Fix sorting on aggregated requests to mongo.
+- Fix `exists` in mongo repositories.
+- Fix `__prepare_query__` and `update` on `BaseMongoRepository`.
+- Fix method signatures in services.
+- Fix host assignment in service object creation.
+- Fix ObjectId import handling in `exception_handlers.py`.
+- Fix PEP 639 compliance.
 
 ### Removed
 
