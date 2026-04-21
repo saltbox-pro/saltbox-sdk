@@ -1,9 +1,9 @@
-import re
 from collections.abc import Callable
 from inspect import isclass
-from typing import Any, ClassVar, TypeVar, cast, overload
+from typing import Any, ClassVar, TypeVar, cast, overload, override
 
 from pydantic import BaseModel
+from pymongo import AsyncMongoClient
 from pymongo.asynchronous.client_session import (
     AsyncClientSession as MongoAsyncClientSession,
 )
@@ -11,16 +11,21 @@ from pymongo.asynchronous.collection import AsyncCollection, ReturnDocument
 from pymongo.asynchronous.command_cursor import AsyncCommandCursor
 from pymongo.asynchronous.cursor import AsyncCursor
 from pymongo.asynchronous.database import AsyncDatabase as MongoAsyncDatabase
-from pymongo.asynchronous.mongo_client import AsyncMongoClient
+from pymongo.errors import CollectionInvalid, InvalidName, OperationFailure
 from pymongo.errors import DuplicateKeyError as MongoDuplicateKeyError
-from pymongo.errors import OperationFailure
 from pymongo.operations import _IndexKeyHint  # pyright: ignore[reportPrivateUsage]
 
 from saltbox_sdk.config.logger_config import logger
 from saltbox_sdk.config.mongo_config import MONGO_SETTINGS
 from saltbox_sdk.db.abc_repository import AbstractRepository
 from saltbox_sdk.db.mongo.aggregations import AggregationsStore
-from saltbox_sdk.db.mongo.schemas_base import EmptyModel, PyObjectId, SortOrder
+from saltbox_sdk.db.mongo.schemas_base import (
+    EmptyModel,
+    PyObjectId,
+    SortOrder,
+    TimeSeriesConfig,
+)
+from saltbox_sdk.db.schemas_base import CursoredTimeseriesResponse
 from saltbox_sdk.exceptions import (
     DuplicateKeyException,
     MongoPipelineException,
@@ -44,19 +49,24 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         query_overrides: ClassVar[dict[str, str]]
         aggregations: ClassVar[AggregationsStore] = AggregationsStore()
         collection_index_to_keys: ClassVar[dict[str, _IndexKeyHint]]
+        collection_index_options: ClassVar[dict[str, dict[str, Any]]] = {}
 
     def __init__(self, database: MongoAsyncDatabase[Any], **kwargs: Any) -> None:
         super().__init__()
-        self.__database: MongoAsyncDatabase[Any] = database
+        self._database: MongoAsyncDatabase[Any] = database
         self.__validate()
 
     @property
     def client(self) -> AsyncMongoClient[Any]:
-        return self.__database.client
+        return self._database.client
 
     @property
     def collection(self) -> AsyncCollection[Any]:
-        return self.__database[self.Meta.collection_name]
+        try:
+            return self._database[self.Meta.collection_name]
+        except InvalidName:
+            logger.error(f'Collection `{self.Meta.collection_name}` does not exist.')
+            raise
 
     @property
     def aggregations(self) -> AggregationsStore:
@@ -266,7 +276,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
 
         if pipeline:
             if MONGO_SETTINGS.mongo_explain:
-                explanation = await self.__database.command(
+                explanation = await self._database.command(
                     'aggregate', self.Meta.collection_name, pipeline=pipeline, explain=True
                 )
                 logger.debug(explanation)
@@ -335,7 +345,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         cursor: AsyncCursor[Any] | AsyncCommandCursor[Any]
         if pipeline:
             if MONGO_SETTINGS.mongo_explain:
-                explanation = await self.__database.command(
+                explanation = await self._database.command(
                     'aggregate', self.Meta.collection_name, pipeline=pipeline, explain=True
                 )
                 logger.debug(explanation)
@@ -576,38 +586,328 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
             msg = f'Error during pipeline execution in aggregate: {e}'
             raise MongoPipelineException(msg) from None
 
+    async def _update_indexes(self) -> None:
+        expected = dict(getattr(self.Meta, 'collection_index_to_keys', {}) or {})
+        options = dict(getattr(self.Meta, 'collection_index_options', {}) or {})
+        existing = await self.collection.index_information()
+        existing_names = set(existing.keys())
+
+        for idx_name in existing_names - {'_id_'}:
+            if idx_name not in expected:
+                try:
+                    await self.collection.drop_index(idx_name)
+                    logger.debug(f'Dropped unexpected index `{idx_name}`')
+                except OperationFailure as e:
+                    logger.warning(f'Cannot drop `{idx_name}`: {e}')
+
+        for idx_name, keys in expected.items():
+            if idx_name not in existing_names:
+                idx_opts = options.get(idx_name, {})
+                # Backward compatibility
+                if 'unique' in idx_name.lower():
+                    idx_opts['unique'] = True
+                await self.collection.create_index(keys, name=idx_name, **idx_opts)
+                logger.debug(f'Created index `{idx_name}`')
+
     async def create_collection(self) -> None:
-        collection_name = self.__class__.__name__
-        indexes: dict[str, _IndexKeyHint] = self.Meta.collection_index_to_keys
-
-        if not indexes:
-            await self._post_create_collection()
-            return
-
-        msg = f'Try to create `{collection_name}`'
-        logger.debug(msg)
-
-        msg = f'Expected indexes in `{collection_name}`: {list(indexes.keys())}'
-        logger.debug(msg)
-
-        existing_indexes = sorted(await self.collection.index_information())
-        msg = f'Existing indexes from `{collection_name}`: {existing_indexes}'
-        logger.debug(msg)
-
-        created = 0
-        for expected_index, keys in indexes.items():
-            if expected_index not in existing_indexes:
-                _ = await self.collection.create_index(
-                    keys, name=expected_index, unique=bool(re.search('unique', expected_index))
-                )
-                created += 1
-                msg = f'Missing `{expected_index}` index has been created'
-                logger.debug(msg)
-
-        if not created:
-            msg = f'`{collection_name}` already exists.'
-            logger.debug(msg)
-
+        try:
+            await self._database.create_collection(self.Meta.collection_name)
+            logger.debug(f'Collection `{self.Meta.collection_name}` has been created')
+        except CollectionInvalid:
+            pass  # Collection already exists
+        await self._update_indexes()
         await self._post_create_collection()
 
     async def _post_create_collection(self) -> None: ...
+
+
+class TimeSeriesRepository[T: BaseModel](BaseMongoRepository[T]):
+    class Meta(BaseMongoRepository.Meta):
+        timeseries: ClassVar[TimeSeriesConfig]
+        expire_after_seconds: ClassVar[int | None] = None
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        ts = cls.Meta.timeseries
+
+        # Runtime-check
+        if not ts or 'timeField' not in ts:
+            msg = "Meta.timeseries['timeField'] is required"  # type: ignore[unreachable]
+            raise ValueError(msg) from None
+
+        time_f = ts['timeField']
+        meta_f = ts.get('metaField')
+        allowed = {time_f, meta_f} if meta_f else {time_f}
+
+        for idx_keys in (getattr(cls.Meta, 'collection_index_to_keys', {}) or {}).values():
+            if not idx_keys or idx_keys[0][0] not in allowed:
+                msg = f'Index {idx_keys} must start with timeField=`{time_f}` or metaField=`{meta_f}`'
+                raise ValueError(msg)
+
+    async def create_collection(self) -> None:
+        ts_config = self.Meta.timeseries
+        opts: dict[str, Any] = {'timeseries': ts_config}
+
+        if ttl := self.Meta.expire_after_seconds:
+            opts['expireAfterSeconds'] = int(ttl)
+        try:
+            await self._database.create_collection(self.Meta.collection_name, **opts)
+            logger.debug(f'TS Collection `{self.Meta.collection_name}` created')
+        except CollectionInvalid:
+            pass  # Collection already exists
+
+        await self._update_ts_indexes()
+        await self._post_create_collection()
+
+    async def _update_ts_indexes(self) -> None:
+        expected = dict(getattr(self.Meta, 'collection_index_to_keys', {}) or {})
+        options = dict(getattr(self.Meta, 'collection_index_options', {}) or {})
+
+        ts = self.Meta.timeseries
+        time_f, meta_f = ts['timeField'], ts.get('metaField')
+        auto_name = f'{meta_f}_1_{time_f}_1' if meta_f else f'{time_f}_1'
+        expected[auto_name] = [(meta_f, 1), (time_f, 1)] if meta_f else [(time_f, 1)]
+
+        existing = await self.collection.index_information()
+        existing_names = set(existing.keys())
+
+        for idx_name in existing_names - {'_id_'}:
+            if idx_name not in expected:
+                try:
+                    await self.collection.drop_index(idx_name)
+                except OperationFailure:
+                    pass  # MongoDB won't allow dropping system/auto indexes
+
+        for idx_name, keys in expected.items():
+            if idx_name not in existing_names:
+                idx_opts = options.get(idx_name, {})
+                await self.collection.create_index(keys, name=idx_name, **idx_opts)
+
+    @overload
+    async def create(
+        self,
+        data: ModelType | dict[str, Any],
+        *,
+        session: MongoAsyncClientSession | None = None,
+    ) -> T: ...
+
+    @overload
+    async def create(
+        self,
+        data: ModelType | dict[str, Any],
+        *,
+        session: MongoAsyncClientSession | None = None,
+        projection_model: type[ProjectionModel],
+    ) -> ProjectionModel: ...
+
+    @override
+    async def create(  # noqa: C901
+        self,
+        data: ModelType | dict[str, Any],
+        *,
+        session: MongoAsyncClientSession | None = None,
+        projection_model: type[ProjectionModel] | None = None,
+    ) -> T | ProjectionModel:
+        try:
+            data = await self.validate_object_data(data)
+        except ValueError as e:
+            raise ObjectCreateException(str(e)) from e
+
+        if isinstance(data, BaseModel):
+            data_dict: dict[str, Any] = data.model_dump(exclude={'id'})
+        else:
+            data_dict = dict(data)
+
+        now = utc_now()
+        if hasattr(self.Meta, 'auto_now_add_fields') and self.Meta.auto_now_add_fields:
+            for field in self.Meta.auto_now_add_fields:
+                data_dict[field] = now
+        if hasattr(self.Meta, 'auto_now_fields') and self.Meta.auto_now_fields:
+            for field in self.Meta.auto_now_fields:
+                data_dict[field] = now
+
+        try:
+            result = await self.collection.insert_one(document=data_dict, session=session)
+        except MongoDuplicateKeyError as e:
+            if e.details and 'keyValue' in e.details:
+                raise DuplicateKeyException(key_value=e.details['keyValue']) from None
+            raise DuplicateKeyException(str(e)) from None
+
+        if not result.inserted_id:
+            raise ObjectCreateException()
+
+        # TODO: check this logic
+        data_dict['_id'] = result.inserted_id
+        obj_data = await self.prepare_object_data(data=data_dict, projection_model=projection_model)
+        if projection_model is not None:
+            return projection_model.model_validate(obj_data)
+        return self.default_model.model_validate(obj_data)
+
+    @overload
+    async def update(
+        self,
+        query: PyObjectId | dict[str, Any],
+        data: ModelType | dict[str, Any],
+        exclude_unset: bool = True,
+        *,
+        session: MongoAsyncClientSession | None = None,
+    ) -> T: ...
+
+    @overload
+    async def update(
+        self,
+        query: PyObjectId | dict[str, Any],
+        data: ModelType | dict[str, Any],
+        exclude_unset: bool = True,
+        *,
+        session: MongoAsyncClientSession | None = None,
+        projection_model: type[ProjectionModel],
+    ) -> ProjectionModel: ...
+
+    @override
+    async def update(
+        self,
+        query: PyObjectId | dict[str, Any],
+        data: ModelType | dict[str, Any],
+        exclude_unset: bool = True,
+        *,
+        session: MongoAsyncClientSession | None = None,
+        projection_model: type[ProjectionModel] | None = None,
+    ) -> T | ProjectionModel:
+        msg = 'TimeSeriesRepository does not support update. Time series documents are append-only by design.'
+        raise NotImplementedError(msg)
+
+    @override
+    async def delete(
+        self,
+        query: PyObjectId | dict[str, Any],
+        *,
+        session: MongoAsyncClientSession | None = None,
+    ) -> int:
+        msg = (
+            'TimeSeriesRepository does not support single-document delete. '
+            'Use delete_many() with a time-range filter instead.'
+        )
+        raise NotImplementedError(msg)
+
+    # TODO: refactor get_list_in_range and get_list_in_range_paginated
+    @overload
+    async def get_list_in_range(
+        self,
+        time_from: Any,
+        time_to: Any,
+        *,
+        extra_filter: dict[str, Any] | None = None,
+        limit: int = 0,
+        sort: dict[str, SortOrder] | None = None,
+        session: MongoAsyncClientSession | None = None,
+    ) -> list[T]: ...
+
+    @overload
+    async def get_list_in_range(
+        self,
+        time_from: Any,
+        time_to: Any,
+        *,
+        extra_filter: dict[str, Any] | None = None,
+        limit: int = 0,
+        sort: dict[str, SortOrder] | None = None,
+        session: MongoAsyncClientSession | None = None,
+        projection_model: type[ProjectionModel],
+    ) -> list[ProjectionModel]: ...
+
+    async def get_list_in_range(
+        self,
+        time_from: Any,
+        time_to: Any,
+        *,
+        extra_filter: dict[str, Any] | None = None,
+        limit: int = 0,
+        sort: dict[str, SortOrder] | None = None,
+        session: MongoAsyncClientSession | None = None,
+        projection_model: type[ProjectionModel] | None = None,
+    ) -> list[T] | list[ProjectionModel]:
+        """Cursor-based pagination for time series data. Returns documents with
+        timeField in [time_from, time_to) range, sorted by timeField ascending by default.
+        """
+        time_f = self.Meta.timeseries['timeField']
+        query: dict[str, Any] = {time_f: {'$gte': time_from, '$lt': time_to}}
+        if extra_filter:
+            query.update(extra_filter)
+
+        if projection_model is not None:
+            return await self.get_list(
+                query=query,
+                limit=limit,
+                skip=0,
+                sort=sort,
+                session=session,
+                projection_model=projection_model,
+            )
+        return await self.get_list(query=query, limit=limit, skip=0, sort=sort, session=session)
+
+    @overload
+    async def get_list_in_range_paginated(
+        self,
+        time_from: Any,
+        time_to: Any,
+        *,
+        extra_filter: dict[str, Any] | None = None,
+        limit: int = 50,
+        sort: dict[str, SortOrder] | None = None,
+        session: MongoAsyncClientSession | None = None,
+    ) -> CursoredTimeseriesResponse[T]: ...
+
+    @overload
+    async def get_list_in_range_paginated(
+        self,
+        time_from: Any,
+        time_to: Any,
+        *,
+        extra_filter: dict[str, Any] | None = None,
+        limit: int = 50,
+        sort: dict[str, SortOrder] | None = None,
+        session: MongoAsyncClientSession | None = None,
+        projection_model: type[ProjectionModel],
+    ) -> CursoredTimeseriesResponse[ProjectionModel]: ...
+
+    async def get_list_in_range_paginated(
+        self,
+        time_from: Any,
+        time_to: Any,
+        *,
+        extra_filter: dict[str, Any] | None = None,
+        limit: int = 50,
+        sort: dict[str, SortOrder] | None = None,
+        session: MongoAsyncClientSession | None = None,
+        projection_model: type[ProjectionModel] | None = None,
+    ) -> CursoredTimeseriesResponse[T] | CursoredTimeseriesResponse[ProjectionModel]:
+        if projection_model is not None:
+            data_pm = await self.get_list_in_range(
+                time_from,
+                time_to,
+                extra_filter=extra_filter,
+                limit=limit,
+                sort=sort,
+                session=session,
+                projection_model=projection_model,
+            )
+            next_cursor = None
+            if len(data_pm) == limit:
+                time_f = self.Meta.timeseries['timeField']
+                next_cursor = getattr(data_pm[-1], time_f, None)
+            return CursoredTimeseriesResponse(data=data_pm, next_cursor=next_cursor)
+
+        data_t = await self.get_list_in_range(
+            time_from,
+            time_to,
+            extra_filter=extra_filter,
+            limit=limit,
+            sort=sort,
+            session=session,
+        )
+        next_cursor = None
+        if len(data_t) == limit:
+            time_f = self.Meta.timeseries['timeField']
+            next_cursor = getattr(data_t[-1], time_f, None)
+        return CursoredTimeseriesResponse(data=data_t, next_cursor=next_cursor)

@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 from pydantic import BaseModel, Field, computed_field
 
 from saltbox_sdk.config.keycloak_config import KC_SETTINGS
@@ -21,6 +23,14 @@ class PaginatedResponse[SchemaType: BaseModel](BaseModel):
 
 class CursoredResponse[SchemaType: BaseModel](BaseModel):
     next_cursor: int = Field(description='Pointer to get next portion of data, 0 when no more data', ge=0)
+    data: list[SchemaType] = Field(description='Items list')
+
+
+class CursoredTimeseriesResponse[SchemaType: BaseModel](BaseModel):
+    next_cursor: TimezoneAwareDatetime | None = Field(
+        description='Timestamp of the last item; pass as time_from for the next page. None means no more data.',
+        default=None,
+    )
     data: list[SchemaType] = Field(description='Items list')
 
 
@@ -77,3 +87,44 @@ ANONYMOUS_SHORT_USER = UserShort(**ANONYMOUS_USER_DATA)
 
 SYSTEM_USER = User(**SYSTEM_USER_DATA, resource_access=None)  # TODO: check `resource_access`
 SYSTEM_SHORT_USER = UserShort(**SYSTEM_USER_DATA)
+
+
+class AuditContextSchema(BaseModel):
+    correlation_id: str
+    subject_id: str | None = None
+    subject_name: str | None = None
+    subject_type: str = 'user'  # user | service | system
+    source_ip: str | None = None
+
+    @classmethod
+    def new_for_service(cls, service_id: str) -> 'AuditContextSchema':
+        """Генерирует контекст для фоновых задач (Scheduler и т.п.)"""
+        return cls(
+            correlation_id=uuid4().hex,
+            subject_id=service_id,
+            subject_name=service_id.replace('_', ' ').title(),
+            subject_type='service',
+            source_ip='internal',
+        )
+
+    def to_amqp_headers(self) -> dict[str, str]:
+        """Сериализует в AMQP headers (все значения должны быть строками/байтами)"""
+        headers = {
+            'x-correlation-id': self.correlation_id,
+            'x-subject-id': self.subject_id or '',
+            'x-subject-name': self.subject_name or '',
+            'x-subject-type': self.subject_type,
+            'x-source-ip': self.source_ip or 'internal',
+        }
+        return headers
+
+    @classmethod
+    def from_amqp_headers(cls, headers: dict[str, str]) -> 'AuditContextSchema':
+        """Восстанавливает контекст из AMQP headers"""
+        return cls(
+            correlation_id=headers.get('x-correlation-id', uuid4().hex),
+            subject_id=headers.get('x-subject-id') or None,
+            subject_name=headers.get('x-subject-name') or None,
+            subject_type=headers.get('x-subject-type', 'service'),
+            source_ip=headers.get('x-source-ip') or None,
+        )

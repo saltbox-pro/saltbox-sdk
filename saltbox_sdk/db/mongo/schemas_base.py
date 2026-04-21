@@ -1,5 +1,5 @@
 from enum import IntEnum
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal, NotRequired, TypedDict
 
 import pydantic
 from bson.errors import InvalidId
@@ -185,3 +185,11 @@ class TreeMixin:
 
 
 class BaseTreeModel(pydantic.BaseModel, IDMixin, TreeMixin): ...
+
+
+class TimeSeriesConfig(TypedDict):
+    timeField: str
+    metaField: NotRequired[str]
+    granularity: NotRequired[Literal['seconds', 'minutes', 'hours']]
+    bucketMaxSpanSeconds: NotRequired[int]
+    bucketRoundingSeconds: NotRequired[int]  # опционально, если нужен точный контроль окон
