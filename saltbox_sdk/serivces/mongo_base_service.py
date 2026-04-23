@@ -3,7 +3,7 @@ from typing import Any, TypeVar, overload
 from pydantic import BaseModel
 from pymongo.asynchronous.client_session import AsyncClientSession as MongoAsyncClientSession
 
-from saltbox_sdk.db.mongo.repository_base import BaseMongoRepository, TimeSeriesRepository
+from saltbox_sdk.db.mongo.repository_base import BaseMongoRepository, MongoUpdateOperator, TimeSeriesRepository
 from saltbox_sdk.db.mongo.schemas_base import PyObjectId, SortOrder
 from saltbox_sdk.db.schemas_base import CursoredTimeseriesResponse, PaginatedResponse
 from saltbox_sdk.serivces.abc_service import AbstractService
@@ -190,6 +190,7 @@ class MongoBaseService[
         data: UpdateSchema | dict[str, Any],
         exclude_unset: bool = True,
         *,
+        operator: MongoUpdateOperator = MongoUpdateOperator.set,
         session: MongoAsyncClientSession | None = None,
     ) -> ModelType: ...
 
@@ -200,6 +201,7 @@ class MongoBaseService[
         data: UpdateSchema | dict[str, Any],
         exclude_unset: bool = True,
         *,
+        operator: MongoUpdateOperator = MongoUpdateOperator.set,
         session: MongoAsyncClientSession | None = None,
         projection_model: type[ProjectionModel],
     ) -> ProjectionModel: ...
@@ -210,6 +212,7 @@ class MongoBaseService[
         data: UpdateSchema | dict[str, Any],
         exclude_unset: bool = True,
         *,
+        operator: MongoUpdateOperator = MongoUpdateOperator.set,
         session: MongoAsyncClientSession | None = None,
         projection_model: type[ProjectionModel] | None = None,
     ) -> ModelType | ProjectionModel:
@@ -218,10 +221,17 @@ class MongoBaseService[
 
         if projection_model:
             result = await self.repo.update(
-                query=query, data=data, projection_model=projection_model, exclude_unset=exclude_unset, session=session
+                query=query,
+                data=data,
+                exclude_unset=exclude_unset,
+                operator=operator,
+                session=session,
+                projection_model=projection_model,
             )
         else:
-            result = await self.repo.update(query=query, data=data, exclude_unset=exclude_unset, session=session)
+            result = await self.repo.update(
+                query=query, data=data, exclude_unset=exclude_unset, operator=operator, session=session
+            )
 
         return result
 

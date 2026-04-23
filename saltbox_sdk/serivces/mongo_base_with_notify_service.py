@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from pymongo.asynchronous.client_session import AsyncClientSession as MongoAsyncClientSession
 from redis.asyncio import Redis
 
-from saltbox_sdk.db.mongo.repository_base import BaseMongoRepository, ProjectionModel
+from saltbox_sdk.db.mongo.repository_base import BaseMongoRepository, MongoUpdateOperator, ProjectionModel
 from saltbox_sdk.db.mongo.schemas_base import PyObjectId
 from saltbox_sdk.serivces.mongo_base_service import MongoBaseService
 
@@ -74,6 +74,7 @@ class MongoBaseWithNotifyService[
         data: UpdateSchema | dict[str, Any],
         exclude_unset: bool = True,
         *,
+        operator: MongoUpdateOperator = MongoUpdateOperator.set,
         session: MongoAsyncClientSession | None = None,
         notify: bool = True,
     ) -> ModelType: ...
@@ -85,6 +86,7 @@ class MongoBaseWithNotifyService[
         data: UpdateSchema | dict[str, Any],
         exclude_unset: bool = True,
         *,
+        operator: MongoUpdateOperator = MongoUpdateOperator.set,
         session: MongoAsyncClientSession | None = None,
         projection_model: type[ProjectionModel],
         notify: bool = True,
@@ -97,6 +99,7 @@ class MongoBaseWithNotifyService[
         data: UpdateSchema | dict[str, Any],
         exclude_unset: bool = True,
         *,
+        operator: MongoUpdateOperator = MongoUpdateOperator.set,
         session: MongoAsyncClientSession | None = None,
         projection_model: type[ProjectionModel] | None = None,
         notify: bool = True,
@@ -105,10 +108,17 @@ class MongoBaseWithNotifyService[
 
         if projection_model:
             obj = await super().update(
-                query=query, data=data, exclude_unset=exclude_unset, projection_model=projection_model, session=session
+                query=query,
+                data=data,
+                exclude_unset=exclude_unset,
+                operator=operator,
+                session=session,
+                projection_model=projection_model,
             )
         else:
-            obj = await super().update(query=query, data=data, exclude_unset=exclude_unset, session=session)
+            obj = await super().update(
+                query=query, data=data, exclude_unset=exclude_unset, operator=operator, session=session
+            )
 
         if isinstance(notify, bool) and notify and hasattr(obj, 'id'):
             await self._notify(obj=obj, action='update')

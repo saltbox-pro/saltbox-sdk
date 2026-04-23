@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from enum import StrEnum
 from inspect import isclass
 from typing import Any, ClassVar, TypeVar, cast, overload, override
 
@@ -39,6 +40,26 @@ from saltbox_sdk.utilities.helpers import recursive_replace_dates, utc_now
 
 ProjectionModel = TypeVar('ProjectionModel', bound=BaseModel)
 ModelType = TypeVar('ModelType', bound=BaseModel)
+
+
+class MongoUpdateOperator(StrEnum):
+    set = '$set'
+    unset = '$unset'
+    inc = '$inc'
+    min = '$min'
+    max = '$max'
+    mul = '$mul'
+    rename = '$rename'
+    set_on_insert = '$setOnInsert'
+    current_date = '$currentDate'  # Example: { field_name: { $type: "timestamp|date" } } }
+    bit = '$bit'  # For bitwise operations `and`, `or` and `xor`: { $bit: { field_name: { and|or|xor: value } } }
+    rand = '$rand'
+    # For lists:
+    add_to_set = '$addToSet'  # Can be used with `$each` modificator
+    pop = '$pop'
+    pull = '$pull'
+    pull_all = '$pullAll'
+    push = '$push'  # Can be used with `$each`, `$position`, `$slice` and `$sort` modificators
 
 
 class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
@@ -485,6 +506,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         data: ModelType | dict[str, Any],
         exclude_unset: bool = True,
         *,
+        operator: MongoUpdateOperator = MongoUpdateOperator.set,
         session: MongoAsyncClientSession | None = None,
     ) -> T: ...
 
@@ -495,6 +517,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         data: ModelType | dict[str, Any],
         exclude_unset: bool = True,
         *,
+        operator: MongoUpdateOperator = MongoUpdateOperator.set,
         session: MongoAsyncClientSession | None = None,
         projection_model: type[ProjectionModel],
     ) -> ProjectionModel: ...
@@ -505,6 +528,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         data: ModelType | dict[str, Any],
         exclude_unset: bool = True,
         *,
+        operator: MongoUpdateOperator = MongoUpdateOperator.set,
         session: MongoAsyncClientSession | None = None,
         projection_model: type[ProjectionModel] | None = None,
     ) -> T | ProjectionModel:
@@ -517,17 +541,22 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         if isinstance(data, BaseModel):
             data = data.model_dump(exclude={'id'}, exclude_unset=exclude_unset)
 
+        after_update_data = {}
+
         if hasattr(self.Meta, 'auto_now_fields') and self.Meta.auto_now_fields:
             now = utc_now()
             for field in self.Meta.auto_now_fields:
-                data[field] = now
+                if operator == MongoUpdateOperator.set:
+                    data[field] = now
+                else:
+                    after_update_data[field] = now
         if not await self.exists(query):
             raise ObjectNotFoundException(obj_type=self.Meta.collection_name, query=query)
 
         # TODO (a.karmanov): FIXME What if query matches multiple? May be UpdateMany is more appropriate?
         result = await self.collection.find_one_and_update(
             filter=query,
-            update={'$set': data},
+            update={operator: data},
             upsert=False,
             return_document=ReturnDocument.AFTER,
             session=session,
@@ -536,6 +565,11 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
 
         if result is None:
             raise ObjectUpdateException()
+
+        if after_update_data:
+            await self.collection.update_one(
+                filter={'_id': result['_id']}, update={'$set': after_update_data}, session=session
+            )
 
         if projection_model:
             return await self.get(
@@ -750,6 +784,7 @@ class TimeSeriesRepository[T: BaseModel](BaseMongoRepository[T]):
         data: ModelType | dict[str, Any],
         exclude_unset: bool = True,
         *,
+        operator: MongoUpdateOperator = MongoUpdateOperator.set,
         session: MongoAsyncClientSession | None = None,
     ) -> T: ...
 
@@ -760,6 +795,7 @@ class TimeSeriesRepository[T: BaseModel](BaseMongoRepository[T]):
         data: ModelType | dict[str, Any],
         exclude_unset: bool = True,
         *,
+        operator: MongoUpdateOperator = MongoUpdateOperator.set,
         session: MongoAsyncClientSession | None = None,
         projection_model: type[ProjectionModel],
     ) -> ProjectionModel: ...
@@ -771,6 +807,7 @@ class TimeSeriesRepository[T: BaseModel](BaseMongoRepository[T]):
         data: ModelType | dict[str, Any],
         exclude_unset: bool = True,
         *,
+        operator: MongoUpdateOperator = MongoUpdateOperator.set,
         session: MongoAsyncClientSession | None = None,
         projection_model: type[ProjectionModel] | None = None,
     ) -> T | ProjectionModel:
