@@ -28,10 +28,7 @@ class SaltBoxBaseException(Exception):
         return f'{self.__class__.__name__}: {self.detail}'
 
     def get_extra_fields(self) -> dict[str, Any]:
-        return {
-            attr: getattr(self, attr, '** MISSING FIELD **')
-            for attr in self.extra_fields
-        }
+        return {attr: getattr(self, attr, '** MISSING FIELD **') for attr in self.extra_fields}
 
 
 class SaltBoxValidationException(SaltBoxBaseException):
@@ -84,8 +81,18 @@ class ObjectNotFoundException(RepositoryException):
 class MultipleObjectsFoundException(RepositoryException):
     """Raised when multiple objects are found when only one was expected."""
 
+    extra_fields = ('obj_type', 'query')
     status_code: int = status.HTTP_409_CONFLICT
     detail: str = 'Multiple objects found.'
+
+    def __init__(self, detail: str | None = None, obj_type: str | None = None, query: dict | None = None) -> None:
+        self.obj_type = obj_type
+        self.query = query
+
+        if detail:
+            self.detail = detail
+
+        super().__init__(self.detail)
 
 
 class DuplicateKeyException(RepositoryException):

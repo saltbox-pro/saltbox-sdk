@@ -212,6 +212,30 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
     ) -> dict[str, Any]:
         return data
 
+    async def prepare_creation_data(
+        self,
+        data: ModelType | dict[str, Any],
+    ) -> dict[str, Any]:
+        try:
+            data = await self.validate_object_data(data)
+        except ValueError as e:
+            raise ObjectCreateException(str(e)) from e
+
+        if isinstance(data, BaseModel):
+            data_dict: dict[str, Any] = data.model_dump(exclude={'id'})
+        else:
+            data_dict = dict(data)
+
+        now = utc_now()
+        if hasattr(self.Meta, 'auto_now_add_fields') and self.Meta.auto_now_add_fields:
+            for field in self.Meta.auto_now_add_fields:
+                data_dict[field] = now
+        if hasattr(self.Meta, 'auto_now_fields') and self.Meta.auto_now_fields:
+            for field in self.Meta.auto_now_fields:
+                data_dict[field] = now
+
+        return data_dict
+
     @overload
     async def validate_object_data(self, data: ModelType) -> ModelType: ...
 
@@ -440,48 +464,16 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
     ) -> bool:
         return await self.count(query=query, session=session, limit=1) >= 1
 
-    @overload
     async def create(
         self,
         data: ModelType | dict[str, Any],
         *,
         session: MongoAsyncClientSession | None = None,
-    ) -> T: ...
-
-    @overload
-    async def create(
-        self,
-        data: ModelType | dict[str, Any],
-        *,
-        session: MongoAsyncClientSession | None = None,
-        projection_model: type[ProjectionModel],
-    ) -> ProjectionModel: ...
-
-    async def create(  # noqa: C901
-        self,
-        data: ModelType | dict[str, Any],
-        *,
-        session: MongoAsyncClientSession | None = None,
-        projection_model: type[ProjectionModel] | None = None,
-    ) -> T | ProjectionModel:
-        try:
-            data = await self.validate_object_data(data)
-        except ValueError as e:
-            raise ObjectCreateException(str(e)) from e
-
-        if isinstance(data, BaseModel):
-            data = data.model_dump(exclude={'id'})  # probably don't need to exclude id
-
-        now = utc_now()
-        if hasattr(self.Meta, 'auto_now_add_fields') and self.Meta.auto_now_add_fields:
-            for field in self.Meta.auto_now_add_fields:
-                data[field] = now
-        if hasattr(self.Meta, 'auto_now_fields') and self.Meta.auto_now_fields:
-            for field in self.Meta.auto_now_fields:
-                data[field] = now
+    ) -> PyObjectId:
+        prepared_data = await self.prepare_creation_data(data)
 
         try:
-            result = await self.collection.insert_one(document=data, session=session)
+            result = await self.collection.insert_one(document=prepared_data, session=session)
         except MongoDuplicateKeyError as e:
             if e.details and 'keyValue' in e.details:
                 raise DuplicateKeyException(key_value=e.details['keyValue']) from None
@@ -490,37 +482,21 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         if not result.inserted_id:
             raise ObjectCreateException()
 
-        if projection_model:
-            return await self.get(
-                PyObjectId(result.inserted_id),
-                session=session,
-                projection_model=projection_model,
-            )
-        else:
-            return await self.get(PyObjectId(result.inserted_id), session=session)
+        return PyObjectId(result.inserted_id)
 
-    @overload
-    async def update(
+    async def bulk_create(
         self,
-        query: PyObjectId | dict[str, Any],
-        data: ModelType | dict[str, Any],
-        exclude_unset: bool = True,
+        data: list[ModelType] | list[dict[str, Any]],
         *,
-        operator: MongoUpdateOperator = MongoUpdateOperator.set,
         session: MongoAsyncClientSession | None = None,
-    ) -> T: ...
+    ) -> list[PyObjectId]:
+        prepared_documents = []
+        for item in data:
+            prepared_documents.append(await self.prepare_creation_data(item))
 
-    @overload
-    async def update(
-        self,
-        query: PyObjectId | dict[str, Any],
-        data: ModelType | dict[str, Any],
-        exclude_unset: bool = True,
-        *,
-        operator: MongoUpdateOperator = MongoUpdateOperator.set,
-        session: MongoAsyncClientSession | None = None,
-        projection_model: type[ProjectionModel],
-    ) -> ProjectionModel: ...
+        result = await self.collection.insert_many(documents=prepared_documents, session=session, ordered=False)
+
+        return result.inserted_ids
 
     async def update(
         self,
@@ -530,13 +506,12 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         *,
         operator: MongoUpdateOperator = MongoUpdateOperator.set,
         session: MongoAsyncClientSession | None = None,
-        projection_model: type[ProjectionModel] | None = None,
-    ) -> T | ProjectionModel:
+    ) -> PyObjectId:
         try:
             data = await self.validate_object_data(data)
         except ValueError as e:
             raise ObjectUpdateException(str(e)) from e
-        query = self.__prepare_query__(query)
+        prepared_query = self.__prepare_query__(query)
 
         if isinstance(data, BaseModel):
             data = data.model_dump(exclude={'id'}, exclude_unset=exclude_unset)
@@ -550,35 +525,33 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
                     data[field] = now
                 else:
                     after_update_data[field] = now
-        if not await self.exists(query):
-            raise ObjectNotFoundException(obj_type=self.Meta.collection_name, query=query)
 
-        # TODO (a.karmanov): FIXME What if query matches multiple? May be UpdateMany is more appropriate?
+        document_count_to_update = await self.count(prepared_query)
+
+        if document_count_to_update == 0:
+            raise ObjectNotFoundException(obj_type=self.Meta.collection_name, query=prepared_query)
+        elif document_count_to_update > 1:
+            raise MultipleObjectsFoundException(obj_type=self.Meta.collection_name, query=prepared_query)
+
         result = await self.collection.find_one_and_update(
-            filter=query,
+            filter=prepared_query,
             update={operator: data},
             upsert=False,
             return_document=ReturnDocument.AFTER,
             session=session,
             projection={'_id': 1},
         )
+        result_id = PyObjectId(result['_id'])
 
         if result is None:
             raise ObjectUpdateException()
 
         if after_update_data:
             await self.collection.update_one(
-                filter={'_id': result['_id']}, update={'$set': after_update_data}, session=session
+                filter={'_id': result_id}, update={'$set': after_update_data}, session=session
             )
 
-        if projection_model:
-            return await self.get(
-                PyObjectId(result['_id']),
-                session=session,
-                projection_model=projection_model,
-            )
-        else:
-            return await self.get(PyObjectId(result['_id']), session=session)
+        return result_id
 
     async def delete(
         self,
@@ -717,51 +690,16 @@ class TimeSeriesRepository[T: BaseModel](BaseMongoRepository[T]):
                 idx_opts = options.get(idx_name, {})
                 await self.collection.create_index(keys, name=idx_name, **idx_opts)
 
-    @overload
     async def create(
         self,
         data: ModelType | dict[str, Any],
         *,
         session: MongoAsyncClientSession | None = None,
-    ) -> T: ...
-
-    @overload
-    async def create(
-        self,
-        data: ModelType | dict[str, Any],
-        *,
-        session: MongoAsyncClientSession | None = None,
-        projection_model: type[ProjectionModel],
-    ) -> ProjectionModel: ...
-
-    @override
-    async def create(  # noqa: C901
-        self,
-        data: ModelType | dict[str, Any],
-        *,
-        session: MongoAsyncClientSession | None = None,
-        projection_model: type[ProjectionModel] | None = None,
-    ) -> T | ProjectionModel:
-        try:
-            data = await self.validate_object_data(data)
-        except ValueError as e:
-            raise ObjectCreateException(str(e)) from e
-
-        if isinstance(data, BaseModel):
-            data_dict: dict[str, Any] = data.model_dump(exclude={'id'})
-        else:
-            data_dict = dict(data)
-
-        now = utc_now()
-        if hasattr(self.Meta, 'auto_now_add_fields') and self.Meta.auto_now_add_fields:
-            for field in self.Meta.auto_now_add_fields:
-                data_dict[field] = now
-        if hasattr(self.Meta, 'auto_now_fields') and self.Meta.auto_now_fields:
-            for field in self.Meta.auto_now_fields:
-                data_dict[field] = now
+    ) -> PyObjectId:
+        prepared_data = await self.prepare_creation_data(data=data)
 
         try:
-            result = await self.collection.insert_one(document=data_dict, session=session)
+            result = await self.collection.insert_one(document=prepared_data, session=session)
         except MongoDuplicateKeyError as e:
             if e.details and 'keyValue' in e.details:
                 raise DuplicateKeyException(key_value=e.details['keyValue']) from None
@@ -771,13 +709,10 @@ class TimeSeriesRepository[T: BaseModel](BaseMongoRepository[T]):
             raise ObjectCreateException()
 
         # TODO: check this logic
-        data_dict['_id'] = result.inserted_id
-        obj_data = await self.prepare_object_data(data=data_dict, projection_model=projection_model)
-        if projection_model is not None:
-            return projection_model.model_validate(obj_data)
-        return self.default_model.model_validate(obj_data)
+        prepared_data['_id'] = result.inserted_id
 
-    @overload
+        return PyObjectId(result.inserted_id)
+
     async def update(
         self,
         query: PyObjectId | dict[str, Any],
@@ -786,31 +721,7 @@ class TimeSeriesRepository[T: BaseModel](BaseMongoRepository[T]):
         *,
         operator: MongoUpdateOperator = MongoUpdateOperator.set,
         session: MongoAsyncClientSession | None = None,
-    ) -> T: ...
-
-    @overload
-    async def update(
-        self,
-        query: PyObjectId | dict[str, Any],
-        data: ModelType | dict[str, Any],
-        exclude_unset: bool = True,
-        *,
-        operator: MongoUpdateOperator = MongoUpdateOperator.set,
-        session: MongoAsyncClientSession | None = None,
-        projection_model: type[ProjectionModel],
-    ) -> ProjectionModel: ...
-
-    @override
-    async def update(
-        self,
-        query: PyObjectId | dict[str, Any],
-        data: ModelType | dict[str, Any],
-        exclude_unset: bool = True,
-        *,
-        operator: MongoUpdateOperator = MongoUpdateOperator.set,
-        session: MongoAsyncClientSession | None = None,
-        projection_model: type[ProjectionModel] | None = None,
-    ) -> T | ProjectionModel:
+    ) -> PyObjectId:
         msg = 'TimeSeriesRepository does not support update. Time series documents are append-only by design.'
         raise NotImplementedError(msg)
 

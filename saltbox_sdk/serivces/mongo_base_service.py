@@ -92,36 +92,21 @@ class MongoBaseService[
 
         return await self.repo.get_list(query=query, sort=sort, limit=limit, skip=skip, session=session)
 
-    @overload
     async def create(
         self,
         data: CreateSchema | dict[str, Any],
         *,
         session: MongoAsyncClientSession | None = None,
-    ) -> ModelType: ...
+    ) -> PyObjectId:
+        return await self.repo.create(data=data, session=session)
 
-    @overload
-    async def create(
+    async def bulk_create(
         self,
-        data: CreateSchema | dict[str, Any],
+        data: list[CreateSchema] | list[dict[str, Any]],
         *,
         session: MongoAsyncClientSession | None = None,
-        projection_model: type[ProjectionModel],
-    ) -> ProjectionModel: ...
-
-    async def create(
-        self,
-        data: CreateSchema | dict[str, Any],
-        *,
-        session: MongoAsyncClientSession | None = None,
-        projection_model: type[ProjectionModel] | None = None,
-    ) -> ModelType | ProjectionModel:
-        if projection_model:
-            result = await self.repo.create(data=data, projection_model=projection_model, session=session)
-        else:
-            result = await self.repo.create(data=data, session=session)
-
-        return result
+    ) -> list[PyObjectId]:
+        return await self.repo.bulk_create(data=data, session=session)
 
     @overload
     async def get_list_paginated(
@@ -183,7 +168,6 @@ class MongoBaseService[
     ) -> bool:
         return await self.repo.exists(query=query, session=session)
 
-    @overload
     async def update(
         self,
         query: dict[str, Any] | PyObjectId,
@@ -192,48 +176,10 @@ class MongoBaseService[
         *,
         operator: MongoUpdateOperator = MongoUpdateOperator.set,
         session: MongoAsyncClientSession | None = None,
-    ) -> ModelType: ...
-
-    @overload
-    async def update(
-        self,
-        query: dict[str, Any] | PyObjectId,
-        data: UpdateSchema | dict[str, Any],
-        exclude_unset: bool = True,
-        *,
-        operator: MongoUpdateOperator = MongoUpdateOperator.set,
-        session: MongoAsyncClientSession | None = None,
-        projection_model: type[ProjectionModel],
-    ) -> ProjectionModel: ...
-
-    async def update(
-        self,
-        query: dict[str, Any] | PyObjectId,
-        data: UpdateSchema | dict[str, Any],
-        exclude_unset: bool = True,
-        *,
-        operator: MongoUpdateOperator = MongoUpdateOperator.set,
-        session: MongoAsyncClientSession | None = None,
-        projection_model: type[ProjectionModel] | None = None,
-    ) -> ModelType | ProjectionModel:
-        if isinstance(query, PyObjectId):
-            query = {'_id': query}
-
-        if projection_model:
-            result = await self.repo.update(
-                query=query,
-                data=data,
-                exclude_unset=exclude_unset,
-                operator=operator,
-                session=session,
-                projection_model=projection_model,
-            )
-        else:
-            result = await self.repo.update(
-                query=query, data=data, exclude_unset=exclude_unset, operator=operator, session=session
-            )
-
-        return result
+    ) -> PyObjectId:
+        return await self.repo.update(
+            query=query, data=data, exclude_unset=exclude_unset, operator=operator, session=session
+        )
 
     async def delete(
         self,
