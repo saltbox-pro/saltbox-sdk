@@ -181,6 +181,19 @@ class MongoBaseService[
             query=query, data=data, exclude_unset=exclude_unset, operator=operator, session=session
         )
 
+    async def bulk_update(
+        self,
+        query: dict[str, Any] | PyObjectId,
+        data: UpdateSchema | dict[str, Any],
+        exclude_unset: bool = True,
+        *,
+        operator: MongoUpdateOperator = MongoUpdateOperator.set,
+        session: MongoAsyncClientSession | None = None,
+    ) -> list[PyObjectId]:
+        return await self.repo.bulk_update(
+            query=query, data=data, exclude_unset=exclude_unset, operator=operator, session=session
+        )
+
     async def delete(
         self,
         query: dict[str, Any] | PyObjectId,

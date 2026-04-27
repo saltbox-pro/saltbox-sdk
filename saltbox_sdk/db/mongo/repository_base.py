@@ -351,8 +351,8 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
     async def get_list(
         self,
         query: dict[str, Any] | None,
-        limit: int,
-        skip: int,
+        limit: int = 0,
+        skip: int = 0,
         *,
         session: MongoAsyncClientSession | None = None,
         sort: dict[str, SortOrder] | None = None,
@@ -362,8 +362,8 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
     async def get_list(
         self,
         query: dict[str, Any] | None,
-        limit: int,
-        skip: int,
+        limit: int = 0,
+        skip: int = 0,
         *,
         session: MongoAsyncClientSession | None = None,
         projection_model: type[ProjectionModel],
@@ -552,6 +552,51 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
             )
 
         return result_id
+
+    async def bulk_update(
+        self,
+        query: PyObjectId | dict[str, Any],
+        data: ModelType | dict[str, Any],
+        exclude_unset: bool = True,
+        *,
+        operator: MongoUpdateOperator = MongoUpdateOperator.set,
+        session: MongoAsyncClientSession | None = None,
+    ) -> list[PyObjectId]:
+        try:
+            data = await self.validate_object_data(data)
+        except ValueError as e:
+            raise ObjectUpdateException(str(e)) from e
+        prepared_query = {'_id': query} if isinstance(query, PyObjectId) else query
+
+        if isinstance(data, BaseModel):
+            data = data.model_dump(exclude={'id'}, exclude_unset=exclude_unset)
+
+        after_update_data = {}
+
+        if hasattr(self.Meta, 'auto_now_fields') and self.Meta.auto_now_fields:
+            now = utc_now()
+            for field in self.Meta.auto_now_fields:
+                if operator == MongoUpdateOperator.set:
+                    data[field] = now
+                else:
+                    after_update_data[field] = now
+
+        documents_to_update = await self.get_list(query=prepared_query, session=session, projection_model=EmptyModel)
+        documents_ids_to_update = [doc.id for doc in documents_to_update]
+
+        await self.collection.update_many(
+            filter={'_id': {'$in': documents_ids_to_update}},
+            update={operator: data},
+            upsert=False,
+            session=session,
+        )
+
+        if after_update_data:
+            await self.collection.update_one(
+                filter={'_id': {'$in': documents_ids_to_update}}, update={'$set': after_update_data}, session=session
+            )
+
+        return documents_ids_to_update
 
     async def delete(
         self,

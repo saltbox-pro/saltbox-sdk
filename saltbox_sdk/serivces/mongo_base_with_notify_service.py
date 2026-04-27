@@ -42,6 +42,22 @@ class MongoBaseWithNotifyService[
 
         return obj_id
 
+    @override
+    async def bulk_create(
+        self,
+        data: list[CreateSchema] | list[dict[str, Any]],
+        *,
+        session: MongoAsyncClientSession | None = None,
+        notify: bool = True,
+    ) -> list[PyObjectId]:
+        obj_ids = await super().bulk_create(data=data, session=session)
+
+        if isinstance(notify, bool) and notify:
+            for obj_id in obj_ids:
+                await self._notify(obj_id=obj_id, action='create')
+
+        return obj_ids
+
     async def update(
         self,
         query: dict[str, Any] | PyObjectId,
@@ -60,6 +76,26 @@ class MongoBaseWithNotifyService[
             await self._notify(obj_id=obj_id, action='update')
 
         return obj_id
+
+    async def bulk_update(
+        self,
+        query: dict[str, Any] | PyObjectId,
+        data: UpdateSchema | dict[str, Any],
+        exclude_unset: bool = True,
+        *,
+        operator: MongoUpdateOperator = MongoUpdateOperator.set,
+        session: MongoAsyncClientSession | None = None,
+        notify: bool = True,
+    ) -> list[PyObjectId]:
+        obj_ids = await super().bulk_update(
+            query=query, data=data, exclude_unset=exclude_unset, operator=operator, session=session
+        )
+
+        if isinstance(notify, bool) and notify:
+            for obj_id in obj_ids:
+                await self._notify(obj_id=obj_id, action='update')
+
+        return obj_ids
 
     @overload
     async def delete(
