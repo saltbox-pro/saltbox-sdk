@@ -494,6 +494,9 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         *,
         session: MongoAsyncClientSession | None = None,
     ) -> list[PyObjectId]:
+        if not data:
+            return []
+
         prepared_documents = []
         for item in data:
             prepared_documents.append(await self.prepare_creation_data(item))
