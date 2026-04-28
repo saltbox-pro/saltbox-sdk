@@ -11,7 +11,7 @@ ruff:
   image: python:3.12-alpine
   before_script:
     - apk add git
-    - pip3 install -e .[dev,rest,mongo,redis,event-bus]
+    - pip3 install -e .[dev,rest,mongo,redis,event-bus,taskiq]
   script:
     ruff check saltbox_sdk
   cache:
@@ -25,7 +25,7 @@ mypy:
   image: python:3.12-alpine
   before_script:
     - apk add git
-    - pip3 install -e .[dev,rest,mongo,redis,event-bus]
+    - pip3 install -e .[dev,rest,mongo,redis,event-bus,taskiq]
   script:
     mypy saltbox_sdk
   cache:

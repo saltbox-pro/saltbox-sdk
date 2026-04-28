@@ -42,6 +42,9 @@ redis = [
 event-bus = [
   "faststream[rabbit]==0.5.48",
 ]
+taskiq = [
+  "taskiq",
+]
 
 [dependency-groups]
 dev = [
@@ -61,6 +64,9 @@ redis = [
 ]
 event-bus = [
   "faststream[rabbit]==0.5.48",
+]
+taskiq = [
+  "taskiq",
 ]
 
 [build-system]
