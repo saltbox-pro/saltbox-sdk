@@ -171,7 +171,11 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
             for field_name, field_value in _query.items():
                 if field_name.startswith('$') and isinstance(field_value, dict):
                     res.extend(extract_fields_names_from_query(field_value))
-                else:
+                elif field_name.startswith('$') and isinstance(field_value, list):
+                    for item in field_value:
+                        if isinstance(item, dict):
+                            res.extend(extract_fields_names_from_query(item))
+                elif not field_name.startswith('$'):
                     res.append(field_name)
 
             return res
