@@ -4,7 +4,7 @@ from inspect import isclass
 from typing import Any, ClassVar, TypeVar, cast, overload, override
 
 from pydantic import BaseModel
-from pymongo import AsyncMongoClient
+from pymongo import AsyncMongoClient, WriteConcern
 from pymongo.asynchronous.client_session import (
     AsyncClientSession as MongoAsyncClientSession,
 )
@@ -501,7 +501,9 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         for item in data:
             prepared_documents.append(await self.prepare_creation_data(item))
 
-        result = await self.collection.insert_many(documents=prepared_documents, session=session, ordered=False)
+        result = await self.collection.with_options(write_concern=WriteConcern(w=0)).insert_many(
+            documents=prepared_documents, session=session, ordered=False
+        )
 
         return result.inserted_ids
 
