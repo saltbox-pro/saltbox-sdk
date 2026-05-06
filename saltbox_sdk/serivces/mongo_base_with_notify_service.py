@@ -8,7 +8,7 @@ from pymongo.asynchronous.client_session import AsyncClientSession as MongoAsync
 from redis.asyncio import Redis
 
 from saltbox_sdk.config.logger_config import logger
-from saltbox_sdk.db.mongo.repository_base import BaseMongoRepository, MongoUpdateOperator, ProjectionModel
+from saltbox_sdk.db.mongo.repository_base import BaseMongoRepository, MongoUpdateOperator
 from saltbox_sdk.db.mongo.schemas_base import EmptyModel, PyObjectId
 from saltbox_sdk.serivces.mongo_base_service import MongoBaseService
 from saltbox_sdk.utilities.taskiq import TaskAlreadyRunningException
@@ -34,6 +34,10 @@ class MongoBaseWithNotifyService[
     @property
     @abstractmethod
     def notify_taskiq_task(self) -> Callable: ...
+
+    @property
+    def notify_schema(self) -> type[BaseModel]:
+        return self.repo.default_model
 
     @property
     @abstractmethod
@@ -186,14 +190,14 @@ class MongoBaseWithNotifyService[
             logger.debug(str(e))
 
     async def run_notify(self, obj_id: PyObjectId, action: str) -> None:
-        obj = await self.get(query={'_id': obj_id})
+        obj = await self.get(query=obj_id, projection_model=self.notify_schema)
         channel = self._get_notify_channel(obj=obj, action=action)
 
         if channel:
             await self.rdb.publish(channel=channel, message=self._prepare_pub_message(obj=obj))
 
     @staticmethod
-    def _prepare_pub_message(obj: BaseModel | ProjectionModel) -> str:
+    def _prepare_pub_message(obj: BaseModel) -> str:
         data = obj.model_dump(by_alias=True, mode='json')
 
         if 'id' in data:
