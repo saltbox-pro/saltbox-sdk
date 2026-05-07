@@ -1,4 +1,5 @@
 import json
+from urllib.parse import unquote
 
 from fastapi import Request
 
@@ -10,7 +11,7 @@ from saltbox_sdk.exceptions import UserHeadersMissingException
 async def get_current_user(request: Request) -> UserShort:
     x_user_id = request.headers.get('X-User-Id')
     x_user_email = request.headers.get('X-User-Email')
-    x_user_name = request.headers.get('X-User-Name', '')
+    x_user_name = unquote(request.headers.get('X-User-Name', ''))
     x_user_email_verified = request.headers.get('X-User-Email-Verified', False)
 
     if not x_user_id or not x_user_email:

@@ -1,6 +1,7 @@
 import time
 from collections.abc import Awaitable, Callable
 from contextvars import ContextVar
+from urllib.parse import unquote
 from uuid import uuid4
 
 from pydantic import BaseModel
@@ -90,7 +91,7 @@ class AuditContextMiddleware(BaseHTTPMiddleware):
 
         return UserContextSchema(
             subject_id=getattr(user, 'sub', request.headers.get('X-User-Id')),
-            subject_name=getattr(user, 'name', request.headers.get('X-User-Name')),
+            subject_name=getattr(user, 'name', unquote(request.headers.get('X-User-Name', ''))),
             subject_roles=subject_roles,
             subject_type=AuditSubjectType.USER,  # TODO: determine subject type based on auth method or other info
             source_ip=source_ip,
