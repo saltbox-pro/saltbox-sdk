@@ -18,7 +18,7 @@ class Source(BaseModel):
 
 
 class SourceMixin:
-    source: Source | None = None
+    source: Source | None = Field(title='Source', default=None)
 
 
 class SourceOnlySchema(BaseModel, SourceMixin): ...
