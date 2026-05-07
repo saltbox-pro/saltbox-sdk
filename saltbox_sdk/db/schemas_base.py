@@ -17,6 +17,13 @@ class Source(BaseModel):
     id: str | None = Field(title='Source id', default=None)
 
 
+class SourceMixin:
+    source: Source | None = None
+
+
+class SourceOnlySchema(BaseModel, SourceMixin): ...
+
+
 class PaginatedResponse[SchemaType: BaseModel](BaseModel):
     total: int = Field(description='Total number of items', ge=0)
     data: list[SchemaType] = Field(description='Items list')

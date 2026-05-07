@@ -13,6 +13,8 @@ from pydantic_core.core_schema import (
     str_schema,
 )
 
+from saltbox_sdk.db.schemas_base import SourceOnlySchema
+
 IS_PYDANTIC_V2_10 = int(pydantic.VERSION.split('.')[0]) >= 2 and int(pydantic.VERSION.split('.')[1]) >= 10
 ALLOWED_MONGO_PIPELINE_QUERY_KEYS = [
     '$and',
@@ -175,6 +177,9 @@ class PyObjectId(ObjectId):
 
 class IDMixin:
     id: PyObjectId = Field(title='ID', alias='_id', serialization_alias='id')
+
+
+class SourceWithIdOnlySchema(SourceOnlySchema, IDMixin): ...
 
 
 class EmptyModel(pydantic.BaseModel, IDMixin): ...
