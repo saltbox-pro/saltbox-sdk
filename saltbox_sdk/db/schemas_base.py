@@ -1,6 +1,7 @@
+from urllib.parse import unquote
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, Field, computed_field, field_serializer
 
 from saltbox_sdk.config.keycloak_config import KC_SETTINGS
 from saltbox_sdk.utilities.helpers import Iso8601ZDatetime as TimezoneAwareDatetime
@@ -48,6 +49,10 @@ class UserShort(BaseModel):
     email: str = Field(title='User email', default='anonymous@localhost')
     email_verified: bool = Field(title='Is email verified', default=False)
     name: str = Field(title='User name', default='Anonymous')
+
+    @field_serializer('name')
+    def serialize_name(self, name: str) -> str:
+        return unquote(name)
 
 
 class User(UserShort):
