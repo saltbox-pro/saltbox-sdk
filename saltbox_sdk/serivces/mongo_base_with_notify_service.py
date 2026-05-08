@@ -5,11 +5,13 @@ from typing import Any, overload, override
 
 from pydantic import BaseModel
 from pymongo.asynchronous.client_session import AsyncClientSession as MongoAsyncClientSession
+from redis import exceptions as redis_exceptions
 from redis.asyncio import Redis
 
 from saltbox_sdk.config.logger_config import logger
 from saltbox_sdk.db.mongo.repository_base import BaseMongoRepository, MongoUpdateOperator
 from saltbox_sdk.db.mongo.schemas_base import EmptyModel, PyObjectId
+from saltbox_sdk.exceptions import ObjectNotFoundException
 from saltbox_sdk.serivces.mongo_base_service import MongoBaseService
 from saltbox_sdk.utilities.taskiq import TaskAlreadyRunningException
 
@@ -190,11 +192,16 @@ class MongoBaseWithNotifyService[
             logger.debug(str(e))
 
     async def run_notify(self, obj_id: PyObjectId, action: str) -> None:
-        obj = await self.get(query=obj_id, projection_model=self.notify_schema)
-        channel = self._get_notify_channel(obj=obj, action=action)
+        try:
+            obj = await self.get(query=obj_id, projection_model=self.notify_schema)
+            channel = self._get_notify_channel(obj=obj, action=action)
 
-        if channel:
-            await self.rdb.publish(channel=channel, message=self._prepare_pub_message(obj=obj))
+            if channel:
+                await self.rdb.publish(channel=channel, message=self._prepare_pub_message(obj=obj))
+        except redis_exceptions.RedisError as e:
+            logger.error(e)
+        except ObjectNotFoundException:
+            logger.debug(f'Object "{self.repo.Meta.collection_name}" for notifying not found by query: {obj_id}')
 
     @staticmethod
     def _prepare_pub_message(obj: BaseModel) -> str:

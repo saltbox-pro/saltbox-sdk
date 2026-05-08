@@ -67,6 +67,9 @@ class ObjectNotFoundException(RepositoryException):
     extra_fields = ('obj_type', 'query')
     status_code: int = status.HTTP_404_NOT_FOUND
     detail: str = 'Object not found.'
+    detail_with_obj_type: str = 'Object "{obj_type}" not found.'
+    detail_with_query: str = 'Object not found by query: {query}.'
+    detail_with_full: str = 'Object "{obj_type}" not found {query}.'
 
     def __init__(self, detail: str | None = None, obj_type: str | None = None, query: dict | None = None) -> None:
         self.obj_type = obj_type
@@ -74,6 +77,12 @@ class ObjectNotFoundException(RepositoryException):
 
         if detail:
             self.detail = detail
+        elif obj_type and query:
+            self.detail = self.detail_with_full.format(obj_type=obj_type, query=query)
+        elif obj_type:
+            self.detail = self.detail_with_obj_type.format(obj_type=obj_type)
+        elif query:
+            self.detail = self.detail_with_query.format(query=query)
 
         super().__init__(self.detail)
 
