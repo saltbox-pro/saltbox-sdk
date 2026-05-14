@@ -1,8 +1,11 @@
+import random
 from ast import literal_eval
+from collections.abc import Iterable
 from typing import Any
 
 from redis.asyncio import Redis
-from taskiq import TaskiqMessage, TaskiqMiddleware, TaskiqResult
+from taskiq import ScheduleSource, TaskiqMessage, TaskiqMiddleware, TaskiqResult
+from taskiq.middlewares import SmartRetryMiddleware as OriginalSmartRetryMiddleware
 
 from saltbox_sdk.config.logger_config import logger
 from saltbox_sdk.db.redis.config import get_redis_now
@@ -77,3 +80,50 @@ class UniqueIdMiddleware(TaskiqMiddleware):
             logger.debug(str(exception))
         else:
             super().on_error(message, result, exception)
+
+
+class SmartRetryMiddleware(OriginalSmartRetryMiddleware):
+    def __init__(
+        self,
+        delay_label_name: str = 'retry_delay',
+        default_retry_count: int = 3,
+        default_retry_label: bool = False,
+        no_result_on_retry: bool = True,
+        default_delay: float = 5,
+        use_jitter: bool = False,
+        use_delay_exponent: bool = False,
+        max_delay_exponent: float = 60,
+        schedule_source: ScheduleSource | None = None,
+        types_of_exceptions: Iterable[type[BaseException]] | None = None,
+    ) -> None:
+        super().__init__(
+            default_retry_count=default_retry_count,
+            default_retry_label=default_retry_label,
+            no_result_on_retry=no_result_on_retry,
+            default_delay=default_delay,
+            use_jitter=use_jitter,
+            use_delay_exponent=use_delay_exponent,
+            max_delay_exponent=max_delay_exponent,
+            schedule_source=schedule_source,
+            types_of_exceptions=types_of_exceptions,
+        )
+        self.delay_label_name = delay_label_name
+
+    def make_delay(self, message: TaskiqMessage, retries: int) -> float:
+        """
+        Calculate retry delay.
+
+        Includes jitter and exponential backoff if enabled.
+
+        :param message: Task message.
+        :param retries: Current retry count.
+        :return: Delay in seconds.
+        """
+        delay = float(message.labels.get(self.delay_label_name, self.default_delay))
+        if self.use_delay_exponent:
+            delay = min(delay * retries, self.max_delay_exponent)
+
+        if self.use_jitter:
+            delay += random.random()  # noqa: S311
+
+        return delay
