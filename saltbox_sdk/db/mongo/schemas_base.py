@@ -175,21 +175,21 @@ class PyObjectId(ObjectId):
         return json_schema
 
 
-class IDMixin:
+class IDMixin(BaseModel):
     id: PyObjectId = Field(title='ID', alias='_id', serialization_alias='id')
 
 
 class SourceWithIdOnlySchema(SourceOnlySchema, IDMixin): ...
 
 
-class EmptyModel(pydantic.BaseModel, IDMixin): ...
+class EmptyModel(IDMixin): ...
 
 
-class TreeMixin:
+class TreeMixin(BaseModel):
     parent_id: PyObjectId | None = Field(title='Parent ID', default=None)
 
 
-class BaseTreeModel(pydantic.BaseModel, IDMixin, TreeMixin): ...
+class BaseTreeModel(IDMixin, TreeMixin): ...
 
 
 class TimeSeriesConfig(TypedDict):

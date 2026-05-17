@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from typing import Literal
 from uuid import uuid4
 
 from pydantic import Field
@@ -17,7 +18,7 @@ class DiscoverySettings(BaseSettings):
     service_title: str
     service_description: str
     service_vendor: str
-    service_type: str
+    service_type: Literal['official', 'third-party']
     is_external: bool = False
     instance_id: str = Field(default_factory=lambda: uuid4().hex)
     instance_host: str
@@ -29,4 +30,4 @@ class DiscoverySettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=ENV_FILE, env_prefix='DISCOVERY_', extra='ignore')
 
 
-DISCOVERY_SETTINGS = DiscoverySettings()
+DISCOVERY_SETTINGS = DiscoverySettings()  # ty: ignore[missing-argument]

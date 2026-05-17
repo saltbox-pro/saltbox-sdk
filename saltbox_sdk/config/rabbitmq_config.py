@@ -17,11 +17,8 @@ class RabbitSettings(BaseSettings):
         return f'amqp://{self.admin}:{self.amqp_password}@{self.host}:{self.port}/'
 
     model_config = SettingsConfigDict(
-        env_file=ENV_FILE,
-        env_prefix='RABBITMQ_',
-        extra='ignore',
-        secrets_dir='/run/secrets'
+        env_file=ENV_FILE, env_prefix='RABBITMQ_', extra='ignore', secrets_dir='/run/secrets'
     )
 
 
-RABBIT_SETTINGS = RabbitSettings()
+RABBIT_SETTINGS = RabbitSettings()  # ty: ignore[missing-argument]

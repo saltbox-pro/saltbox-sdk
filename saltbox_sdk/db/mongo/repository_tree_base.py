@@ -55,14 +55,12 @@ class BaseTreeMongoRepository[T: BaseModel](BaseMongoRepository[T]):
                 raise SaltBoxValidationException(msg)
         elif isinstance(target, PyObjectId):
             target_id = target
-        else:
-            msg = 'Unknown target type'  # type: ignore
-            raise SaltBoxValidationException(msg)
 
         if projection_model is not None:
-            return await self.get_list(
+            result: list[ProjectionModel] = await self.get_list(
                 query={'parent_id': target_id}, session=session, projection_model=projection_model, limit=0, skip=0
             )
+            return result
         else:
             return await self.get_list(query={'parent_id': target_id}, session=session, limit=0, skip=0)
 
@@ -80,7 +78,7 @@ class BaseTreeMongoRepository[T: BaseModel](BaseMongoRepository[T]):
                 msg = 'Type of "parent_id" must be "PyObjectId"'
                 raise SaltBoxValidationException(msg)
 
-            if hasattr(target, 'id'):
+            if hasattr(target, 'id') and isinstance(target.id, (PyObjectId, str, bytes, type(None))):
                 return await self.get_parent_id(PyObjectId(target.id))
 
             msg = 'Target must be have "id" field'
@@ -98,9 +96,6 @@ class BaseTreeMongoRepository[T: BaseModel](BaseMongoRepository[T]):
                 raise MultipleObjectsFoundException()
 
             return PyObjectId(obj_data[0]['parent_id']) if 'parent_id' in obj_data[0] else None
-        else:
-            msg = 'Unknown target type'  # type: ignore
-            raise SaltBoxValidationException(msg)
 
     @overload
     async def get_parent(
@@ -192,16 +187,13 @@ class BaseTreeMongoRepository[T: BaseModel](BaseMongoRepository[T]):
         ancestors_ids: list[PyObjectId] = []
         if include_self:
             if isinstance(target, BaseModel):
-                if hasattr(target, 'id'):
+                if hasattr(target, 'id') and isinstance(target.id, (PyObjectId, str, bytes, type(None))):
                     ancestors_ids.append(PyObjectId(target.id))
                 else:
                     msg = 'Target must be have "id" field"'
                     raise SaltBoxValidationException(msg)
             elif isinstance(target, PyObjectId):
                 ancestors_ids.append(target)
-            else:
-                msg = 'Unknown target type'  # type: ignore
-                raise SaltBoxValidationException(msg)
 
         try:
             parent_id = await self.get_parent_id(target, session=session)

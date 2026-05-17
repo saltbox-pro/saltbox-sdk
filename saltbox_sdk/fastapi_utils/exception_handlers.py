@@ -1,9 +1,12 @@
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 try:
     from bson import ObjectId
-except ModuleNotFoundError:
-    ObjectId = None  # type: ignore[assignment, misc]
+except ImportError:
+    if TYPE_CHECKING:
+        from bson import ObjectId
+    else:
+        ObjectId = None
 from fastapi import Request
 from fastapi.responses import JSONResponse
 

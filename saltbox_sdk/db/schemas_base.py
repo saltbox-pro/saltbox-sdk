@@ -7,7 +7,7 @@ from saltbox_sdk.config.keycloak_config import KC_SETTINGS
 from saltbox_sdk.utilities.helpers import Iso8601ZDatetime as TimezoneAwareDatetime
 
 
-class CreatedModifiedMixin:
+class CreatedModifiedMixin(BaseModel):
     created: TimezoneAwareDatetime = Field(title='Created')
     modified: TimezoneAwareDatetime = Field(title='Modified')
 
@@ -17,11 +17,11 @@ class Source(BaseModel):
     id: str | None = Field(title='Source id', default=None)
 
 
-class SourceMixin:
+class SourceMixin(BaseModel):
     source: Source | None = Field(title='Source', default=None)
 
 
-class SourceOnlySchema(BaseModel, SourceMixin): ...
+class SourceOnlySchema(SourceMixin): ...
 
 
 class PaginatedResponse[SchemaType: BaseModel](BaseModel):

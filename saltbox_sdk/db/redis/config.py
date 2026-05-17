@@ -23,4 +23,4 @@ async def get_redis() -> AsyncGenerator[Redis, None]:
     redis = Redis(connection_pool=POOL)
     yield redis
     LOGGER.debug('Close redis connection now')
-    await redis.aclose()  # type: ignore[attr-defined]
+    await redis.aclose()  # type: ignore[attr-defined]  # ty: ignore[unresolved-attribute]

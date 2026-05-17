@@ -61,9 +61,10 @@ class RedisSortedsetBaseService[
         projection_model: type[ProjectionModel] | None = None,
     ) -> list[ModelType] | list[ProjectionModel]:
         if projection_model:
-            return await self.repo.get_list(
+            result: list[ProjectionModel] = await self.repo.get_list(
                 start=start, end=end, limit=limit, skip=skip, desc=desc, projection_model=projection_model
             )
+            return result
 
         return await self.repo.get_list(start=start, end=end, limit=limit, skip=skip, desc=desc)
 

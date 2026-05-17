@@ -1,5 +1,6 @@
 from typing import Any
 
+from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
 
 from saltbox_sdk.config.keycloak_config import KC_SETTINGS
@@ -50,7 +51,9 @@ def get_custom_openapi_schema(
     return openapi_schema
 
 
-def custom_openapi(app: Any, app_config: dict[str, Any], servers: list[dict[str, str]] | None = None) -> Any:
+def custom_openapi(
+    app: FastAPI, app_config: dict[str, Any], servers: list[dict[str, str]] | None = None
+) -> dict[str, Any]:
     if app.openapi_schema:
         return app.openapi_schema
 

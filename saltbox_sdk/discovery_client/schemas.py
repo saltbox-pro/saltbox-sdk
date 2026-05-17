@@ -1,4 +1,5 @@
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -7,11 +8,6 @@ class ProxyBalancingStrategy(StrEnum):
     RANDOM = 'rand'
     ROUND_ROBIN = 'rr'
     WEIGHTED_ROUND_ROBIN = 'wrr'
-
-
-class ServiceType(StrEnum):
-    OFFICIAL = 'official'
-    THIRD_PARTY = 'third-party'
 
 
 class HealthCheckResponse(BaseModel):
@@ -103,7 +99,7 @@ class ServiceSchema(BaseModel):
     title: str
     description: str
     vendor: str
-    type: ServiceType
+    type: Literal['official', 'third-party']
     instances: list[ServiceInstance]
     front_config: ServiceFrontendConfig
     enabled: bool = True

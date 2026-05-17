@@ -838,7 +838,7 @@ class TimeSeriesRepository[T: BaseModel](BaseMongoRepository[T]):
             query.update(extra_filter)
 
         if projection_model is not None:
-            return await self.get_list(
+            result = await self.get_list(
                 query=query,
                 limit=limit,
                 skip=0,
@@ -846,6 +846,7 @@ class TimeSeriesRepository[T: BaseModel](BaseMongoRepository[T]):
                 session=session,
                 projection_model=projection_model,
             )
+            return result
         return await self.get_list(query=query, limit=limit, skip=0, sort=sort, session=session)
 
     @overload

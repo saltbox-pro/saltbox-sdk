@@ -12,23 +12,21 @@ class MigrationStatus(StrEnum):
     failed = 'failed'
 
 
-class MigrationReadOnlyFieldsMixin:
+class MigrationReadOnlyFieldsMixin(BaseModel):
     name: str = Field(title='Name')
 
     status: MigrationStatus = Field(title='Status')
     stages_results: list[Any] = Field(title='Stages results')
 
 
-class MigrationEditableFieldsMixin: ...
+class MigrationEditableFieldsMixin(BaseModel): ...
 
 
-class MigrationCreateSchema(BaseModel, MigrationReadOnlyFieldsMixin, MigrationEditableFieldsMixin): ...
+class MigrationCreateSchema(MigrationReadOnlyFieldsMixin, MigrationEditableFieldsMixin): ...
 
 
-class MigrationUpdateSchema(BaseModel, MigrationEditableFieldsMixin):
+class MigrationUpdateSchema(MigrationEditableFieldsMixin):
     model_config = ConfigDict(extra='ignore')
 
 
-class MigrationModel(
-    BaseModel, CreatedModifiedMixin, MigrationReadOnlyFieldsMixin, MigrationEditableFieldsMixin, IDMixin
-): ...
+class MigrationModel(CreatedModifiedMixin, MigrationReadOnlyFieldsMixin, MigrationEditableFieldsMixin, IDMixin): ...

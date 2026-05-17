@@ -8,7 +8,7 @@ from pydantic import BaseModel
 class AbstractRepository[T: BaseModel](ABC):
     @cached_property
     def default_model(self) -> type[T]:
-        return cast(type[T], self.__orig_bases__[0].__args__[0])  # type: ignore[attr-defined]
+        return cast(type[T], self.__orig_bases__[0].__args__[0])  # type: ignore[attr-defined] # ty: ignore[unresolved-attribute]
 
     @abstractmethod
     async def get(self, *args: Any, **kwargs: Any) -> T: ...

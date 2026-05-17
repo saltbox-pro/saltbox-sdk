@@ -86,9 +86,10 @@ class MongoBaseService[
         sort: dict[str, SortOrder] | None = None,
     ) -> list[ModelType] | list[ProjectionModel]:
         if projection_model:
-            return await self.repo.get_list(
+            result: list[ProjectionModel] = await self.repo.get_list(
                 query=query, sort=sort, limit=limit, skip=skip, projection_model=projection_model, session=session
             )
+            return result
 
         return await self.repo.get_list(query=query, sort=sort, limit=limit, skip=skip, session=session)
 
@@ -256,7 +257,7 @@ class MongoTimeseriesBaseService[
         projection_model: type[ProjectionModel] | None = None,
     ) -> list[ModelType] | list[ProjectionModel]:
         if projection_model is not None:
-            return await self.repo.get_list_in_range(
+            result: list[ProjectionModel] = await self.repo.get_list_in_range(
                 time_from,
                 time_to,
                 extra_filter=extra_filter,
@@ -265,6 +266,7 @@ class MongoTimeseriesBaseService[
                 session=session,
                 projection_model=projection_model,
             )
+            return result
         return await self.repo.get_list_in_range(
             time_from,
             time_to,
@@ -311,7 +313,7 @@ class MongoTimeseriesBaseService[
         projection_model: type[ProjectionModel] | None = None,
     ) -> CursoredTimeseriesResponse[ModelType] | CursoredTimeseriesResponse[ProjectionModel]:
         if projection_model is not None:
-            return await self.repo.get_list_in_range_paginated(
+            result: CursoredTimeseriesResponse[ProjectionModel] = await self.repo.get_list_in_range_paginated(
                 time_from,
                 time_to,
                 extra_filter=extra_filter,
@@ -320,6 +322,7 @@ class MongoTimeseriesBaseService[
                 session=session,
                 projection_model=projection_model,
             )
+            return result
         return await self.repo.get_list_in_range_paginated(
             time_from,
             time_to,
