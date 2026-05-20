@@ -39,7 +39,7 @@ class MetricAggregator:
             request_length = 0
 
         status = info.response.status_code
-        route = self._get_route_from_request(request=request)
+        route = self._get_route_from_request(request=request, status=status)
         labels = {
             'endpoint': f'{request.method} {route}',
             'status_code': str(status),
@@ -51,6 +51,9 @@ class MetricAggregator:
         self.request_duration.labels(**labels).observe(info.duration)
 
     @staticmethod
-    def _get_route_from_request(request: Request) -> str:
+    def _get_route_from_request(request: Request, status: int) -> str:
         root_path: str = request.scope.get("root_path", "")
+        route = request.scope.get("route")
+        if route and getattr(route, "path_format", None) and status < 500:
+            return f"{root_path}{route.path_format}"
         return root_path + request.url.path
