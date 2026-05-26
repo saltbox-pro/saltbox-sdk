@@ -155,6 +155,22 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
 
         return cast(dict[str, Any], recursive_replace_dates(query))
 
+    @classmethod
+    def _extract_fields_from_query(cls, query: dict[str, Any]) -> list[tuple[str, Any]]:
+        res = []
+
+        for field_name, field_value in query.items():
+            if field_name.startswith('$') and isinstance(field_value, dict):
+                res.extend(cls._extract_fields_from_query(field_value))
+            elif field_name.startswith('$') and isinstance(field_value, list):
+                for item in field_value:
+                    if isinstance(item, dict):
+                        res.extend(cls._extract_fields_from_query(item))
+            elif not field_name.startswith('$'):
+                res.append((field_name, field_value))
+
+        return res
+
     async def prepare_aggregation_pipeline(
         self,
         projection: dict[str, Any],
@@ -165,23 +181,8 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
     ) -> list[dict]:
         fields_names = list(projection.keys())
 
-        def extract_fields_names_from_query(_query: dict[str, Any]) -> list[str]:
-            res = []
-
-            for field_name, field_value in _query.items():
-                if field_name.startswith('$') and isinstance(field_value, dict):
-                    res.extend(extract_fields_names_from_query(field_value))
-                elif field_name.startswith('$') and isinstance(field_value, list):
-                    for item in field_value:
-                        if isinstance(item, dict):
-                            res.extend(extract_fields_names_from_query(item))
-                elif not field_name.startswith('$'):
-                    res.append(field_name)
-
-            return res
-
         if query:
-            fields_names.extend(extract_fields_names_from_query(query))
+            fields_names.extend([field[0] for field in self._extract_fields_from_query(query)])
 
         return self.aggregations.build_pipeline(fields_names=fields_names)
 

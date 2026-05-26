@@ -13,6 +13,27 @@ class EventBusBaseMessage(BaseModel):
     user: UserShort | None = None
 
 
+# Minion_extra data
+
+
+class MinionAddOrUpdateExtraDataRequestMessage(EventBusBaseMessage):
+    minion_id: str
+    master: str
+
+    category_name: str
+    values: list[Any]
+
+
+class MinionRemoveExtraDataRequestMessage(EventBusBaseMessage):
+    minion_id: str
+    master: str
+
+    category_name: str
+
+
+# Audit
+
+
 class AuditCategory(StrEnum):
     AUTHN = 'authentication'
     AUTHZ = 'authorization'

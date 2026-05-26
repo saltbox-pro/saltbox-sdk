@@ -24,6 +24,14 @@ class AddFieldsAggregationStage(AbstractAggregationStage):
         return {'$addFields': self.fields}
 
 
+class MatchAggregationStage(AbstractAggregationStage):
+    def __init__(self, *, query: dict[str, Any]) -> None:
+        self.query = query
+
+    def render_stage(self) -> dict[str, Any]:
+        return {'$match': self.query}
+
+
 class LookupAggregationStage(AbstractAggregationStage):
     def __init__(
         self,
@@ -32,7 +40,7 @@ class LookupAggregationStage(AbstractAggregationStage):
         local_field: str | None = None,
         foreign_field: str | None = None,
         let: dict[str, Any] | None = None,
-        pipeline: list[dict[str, Any]] | None = None,
+        pipeline: list[dict[str, Any] | AbstractAggregationStage] | None = None,
         as_field: str,
     ) -> None:
         self.from_collection = from_collection
@@ -56,7 +64,10 @@ class LookupAggregationStage(AbstractAggregationStage):
         if self.let is not None:
             result['let'] = self.let
         if self.pipeline is not None:
-            result['pipeline'] = self.pipeline
+            result['pipeline'] = [
+                pipline_stage.render_stage() if isinstance(pipline_stage, AbstractAggregationStage) else pipline_stage
+                for pipline_stage in self.pipeline
+            ]
 
         return {'$lookup': result}
 
