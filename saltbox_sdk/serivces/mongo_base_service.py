@@ -3,9 +3,9 @@ from typing import Any, TypeVar, overload
 from pydantic import BaseModel
 from pymongo.asynchronous.client_session import AsyncClientSession as MongoAsyncClientSession
 
-from saltbox_sdk.db.mongo.repository_base import BaseMongoRepository, MongoUpdateOperator, TimeSeriesRepository
+from saltbox_sdk.db.mongo.repository_base import BaseMongoRepository, MongoUpdateOperator
 from saltbox_sdk.db.mongo.schemas_base import PyObjectId, SortOrder
-from saltbox_sdk.db.schemas_base import CursoredTimeseriesResponse, PaginatedResponse
+from saltbox_sdk.db.schemas_base import PaginatedResponse
 from saltbox_sdk.serivces.abc_service import AbstractService
 
 ProjectionModel = TypeVar('ProjectionModel', bound=BaseModel)
@@ -182,6 +182,19 @@ class MongoBaseService[
             query=query, data=data, exclude_unset=exclude_unset, operator=operator, session=session
         )
 
+    async def update_or_create(
+        self,
+        query: dict[str, Any],
+        data: dict[str, Any],
+        exclude_unset: bool = True,
+        *,
+        operator: MongoUpdateOperator = MongoUpdateOperator.set,
+        session: MongoAsyncClientSession | None = None,
+    ) -> PyObjectId:
+        return await self.repo.update(
+            query=query, data=data, exclude_unset=exclude_unset, upsert=True, operator=operator, session=session
+        )
+
     async def bulk_update(
         self,
         query: dict[str, Any] | PyObjectId,
@@ -213,121 +226,3 @@ class MongoBaseService[
         session: MongoAsyncClientSession | None = None,
     ) -> int:
         return await self.repo.delete_many(query=query, session=session)
-
-
-class MongoTimeseriesBaseService[
-    Repository: TimeSeriesRepository,
-    ModelType: BaseModel,
-    CreateSchema: BaseModel,
-](MongoBaseService[Repository, ModelType, CreateSchema, BaseModel]):
-    @overload
-    async def get_list_in_range(
-        self,
-        time_from: Any,
-        time_to: Any,
-        *,
-        extra_filter: dict[str, Any] | None = None,
-        limit: int = 0,
-        sort: dict[str, SortOrder] | None = None,
-        session: MongoAsyncClientSession | None = None,
-    ) -> list[ModelType]: ...
-
-    @overload
-    async def get_list_in_range(
-        self,
-        time_from: Any,
-        time_to: Any,
-        *,
-        extra_filter: dict[str, Any] | None = None,
-        limit: int = 0,
-        sort: dict[str, SortOrder] | None = None,
-        session: MongoAsyncClientSession | None = None,
-        projection_model: type[ProjectionModel],
-    ) -> list[ProjectionModel]: ...
-
-    async def get_list_in_range(
-        self,
-        time_from: Any,
-        time_to: Any,
-        *,
-        extra_filter: dict[str, Any] | None = None,
-        limit: int = 0,
-        sort: dict[str, SortOrder] | None = None,
-        session: MongoAsyncClientSession | None = None,
-        projection_model: type[ProjectionModel] | None = None,
-    ) -> list[ModelType] | list[ProjectionModel]:
-        if projection_model is not None:
-            result: list[ProjectionModel] = await self.repo.get_list_in_range(
-                time_from,
-                time_to,
-                extra_filter=extra_filter,
-                limit=limit,
-                sort=sort,
-                session=session,
-                projection_model=projection_model,
-            )
-            return result
-        return await self.repo.get_list_in_range(
-            time_from,
-            time_to,
-            extra_filter=extra_filter,
-            limit=limit,
-            sort=sort,
-            session=session,
-        )
-
-    @overload
-    async def get_list_in_range_paginated(
-        self,
-        time_from: Any,
-        time_to: Any,
-        *,
-        extra_filter: dict[str, Any] | None = None,
-        limit: int = 50,
-        sort: dict[str, SortOrder] | None = None,
-        session: MongoAsyncClientSession | None = None,
-    ) -> CursoredTimeseriesResponse[ModelType]: ...
-
-    @overload
-    async def get_list_in_range_paginated(
-        self,
-        time_from: Any,
-        time_to: Any,
-        *,
-        extra_filter: dict[str, Any] | None = None,
-        limit: int = 50,
-        sort: dict[str, SortOrder] | None = None,
-        session: MongoAsyncClientSession | None = None,
-        projection_model: type[ProjectionModel],
-    ) -> CursoredTimeseriesResponse[ProjectionModel]: ...
-
-    async def get_list_in_range_paginated(
-        self,
-        time_from: Any,
-        time_to: Any,
-        *,
-        extra_filter: dict[str, Any] | None = None,
-        limit: int = 50,
-        sort: dict[str, SortOrder] | None = None,
-        session: MongoAsyncClientSession | None = None,
-        projection_model: type[ProjectionModel] | None = None,
-    ) -> CursoredTimeseriesResponse[ModelType] | CursoredTimeseriesResponse[ProjectionModel]:
-        if projection_model is not None:
-            result: CursoredTimeseriesResponse[ProjectionModel] = await self.repo.get_list_in_range_paginated(
-                time_from,
-                time_to,
-                extra_filter=extra_filter,
-                limit=limit,
-                sort=sort,
-                session=session,
-                projection_model=projection_model,
-            )
-            return result
-        return await self.repo.get_list_in_range_paginated(
-            time_from,
-            time_to,
-            extra_filter=extra_filter,
-            limit=limit,
-            sort=sort,
-            session=session,
-        )

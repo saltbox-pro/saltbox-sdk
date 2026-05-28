@@ -78,7 +78,7 @@ class BaseTreeMongoRepository[T: BaseModel](BaseMongoRepository[T]):
                 msg = 'Type of "parent_id" must be "PyObjectId"'
                 raise SaltBoxValidationException(msg)
 
-            if hasattr(target, 'id') and isinstance(target.id, (PyObjectId, str, bytes, type(None))):
+            if hasattr(target, 'id') and isinstance(target.id, PyObjectId | str | bytes | type(None)):
                 return await self.get_parent_id(PyObjectId(target.id))
 
             msg = 'Target must be have "id" field'
@@ -187,7 +187,7 @@ class BaseTreeMongoRepository[T: BaseModel](BaseMongoRepository[T]):
         ancestors_ids: list[PyObjectId] = []
         if include_self:
             if isinstance(target, BaseModel):
-                if hasattr(target, 'id') and isinstance(target.id, (PyObjectId, str, bytes, type(None))):
+                if hasattr(target, 'id') and isinstance(target.id, PyObjectId | str | bytes | type(None)):
                     ancestors_ids.append(PyObjectId(target.id))
                 else:
                     msg = 'Target must be have "id" field"'
