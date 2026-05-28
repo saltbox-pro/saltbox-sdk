@@ -194,9 +194,20 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         skip: int | None = None,
         sort: dict[str, SortOrder] | None = None,
     ) -> list[dict[str, Any]]:
-        pipeline: list[dict[str, Any]] = await self.prepare_aggregation_pipeline(projection, query, limit, skip, sort)
+        pipeline: list[dict] = []
+        query_pipline: list[dict] = []
 
-        if pipeline:
+        if query:
+            query_fields = [field[0] for field in self._extract_fields_from_query(query)]
+            query_pipline = self.aggregations.build_pipeline(fields_names=query_fields)
+
+        project_pipline: list[dict] = self.aggregations.build_pipeline(
+            fields_names=list(projection.keys()), stages_to_exclude=query_pipline
+        )
+
+        if query_pipline or project_pipline:
+            if query_pipline:
+                pipeline.extend(query_pipline)
             if query:
                 pipeline.append({'$match': query})
             if sort:
@@ -205,6 +216,8 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
                 pipeline.append({'$skip': skip})
             if limit:
                 pipeline.append({'$limit': limit})
+            if project_pipline:
+                pipeline.extend(project_pipline)
 
             pipeline.append({'$project': projection})
 

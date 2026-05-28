@@ -113,22 +113,25 @@ class AggregationsStore:
             aggregation.field_name: aggregation for aggregation in aggregations
         }
 
-    def __get_pipeline(self, field_name: str, pipeline: list[dict]) -> None:
+    def __get_pipeline(self, field_name: str, pipeline: list[dict], stages_to_exclude: list[dict]) -> None:
         aggregation = self.__aggregations[field_name]
 
         for parent_aggregation in aggregation.parent_aggregations:
-            self.__get_pipeline(parent_aggregation, pipeline)
+            self.__get_pipeline(field_name=parent_aggregation, pipeline=pipeline, stages_to_exclude=stages_to_exclude)
 
         for stage in aggregation.stages:
             rendered_stage = stage.render_stage()
-            if rendered_stage not in pipeline:
+            if rendered_stage not in pipeline and rendered_stage not in stages_to_exclude:
                 pipeline.append(rendered_stage)
 
-    def build_pipeline(self, fields_names: list[str]) -> list[dict]:
+    def build_pipeline(self, fields_names: list[str], stages_to_exclude: list[dict] | None = None) -> list[dict]:
+        if stages_to_exclude is None:
+            stages_to_exclude = []
+
         pipeline: list[dict] = []
 
         for field_key in self.__aggregations.keys():
             if any(field_key == field_name or f'{field_key}.' in field_name for field_name in fields_names):
-                self.__get_pipeline(field_key, pipeline)
+                self.__get_pipeline(field_name=field_key, pipeline=pipeline, stages_to_exclude=stages_to_exclude)
 
         return pipeline
