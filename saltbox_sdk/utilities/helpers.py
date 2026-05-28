@@ -1,6 +1,6 @@
 import re
 from datetime import UTC, datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, overload
 
 from pydantic import AfterValidator, PlainSerializer
 
@@ -48,6 +48,14 @@ Iso8601ZDatetime = Annotated[
     PlainSerializer(format_iso8601_z, when_used='json'),
     'Aware datetime serializing with Z-suffix. Unaware datetime decides UTC.',
 ]
+
+
+@overload
+def recursive_replace_dates(obj: dict) -> dict: ...
+
+
+@overload
+def recursive_replace_dates(obj: list) -> list: ...
 
 
 def recursive_replace_dates(obj: Any) -> Any:

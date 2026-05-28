@@ -16,12 +16,27 @@ class EventBusBaseMessage(BaseModel):
 # Minion_extra data
 
 
+class MinionExtraDataType(StrEnum):
+    STATIC = 'static'
+    AGGREGATED = 'aggregated'
+
+
+class MinionExtraDataItem(BaseModel):
+    category_data: dict[str, Any]
+    minion_data: dict[str, Any]
+
+
+class MinionExtraData(BaseModel):
+    category_name: str
+    category_type: MinionExtraDataType = Field(default=MinionExtraDataType.STATIC)
+    items: list[MinionExtraDataItem]
+
+
 class MinionAddOrUpdateExtraDataRequestMessage(EventBusBaseMessage):
     minion_id: str
     master: str
 
-    category_name: str
-    values: list[Any]
+    data_list: list[MinionExtraData]
 
 
 class MinionRemoveExtraDataRequestMessage(EventBusBaseMessage):
