@@ -29,6 +29,8 @@ class MinionExtraDataItem(BaseModel):
 class MinionExtraData(BaseModel):
     category_name: str
     category_type: MinionExtraDataType = Field(default=MinionExtraDataType.STATIC)
+    category_fields: list[str] = Field(default_factory=list)
+    minion_fields: list[str] = Field(default_factory=list)
     items: list[MinionExtraDataItem]
 
 
