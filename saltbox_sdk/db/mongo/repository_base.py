@@ -37,7 +37,7 @@ ModelType = TypeVar('ModelType', bound=BaseModel)
 
 
 class QueryOverrideCallbackType(Protocol):
-    def __call__(self, field_name: str, field_match: Match, field_value: Any, full_raw_query: dict) -> dict: ...
+    async def __call__(self, field_name: str, field_match: Match, field_value: Any, full_raw_query: dict) -> dict: ...
 
 
 class MongoUpdateOperator(StrEnum):
@@ -107,7 +107,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
 
         return query_overrides
 
-    def __prepare_query__(self, query: PyObjectId | dict[str, Any] | None) -> dict[str, Any]:  # noqa: C901
+    async def __prepare_query__(self, query: PyObjectId | dict[str, Any] | None) -> dict[str, Any]:  # noqa: C901
         if isinstance(query, PyObjectId):
             return {'_id': query}
 
@@ -116,7 +116,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
 
         query_overrides = self.__query_overrides__
 
-        def recursive_override(data: dict[str, Any]) -> dict[str, Any]:
+        async def recursive_override(data: dict[str, Any]) -> dict[str, Any]:
             _query: dict[str, Any] = {}
 
             for data_key, data_value in data.items():
@@ -125,7 +125,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
                     field_match = field_re.match(data_key)
                     if field_match:
                         _query.update(
-                            field_callback(
+                            await field_callback(
                                 field_name=data_key,
                                 field_match=field_match,
                                 field_value=data_value,
@@ -141,9 +141,9 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
                 if data_value is None:
                     _query[data_key] = data_value
                 elif isinstance(data_value, dict):
-                    _query[data_key] = recursive_override(data_value)
+                    _query[data_key] = await recursive_override(data_value)
                 elif isinstance(data_value, list) and data_key not in ['$in', '$nin']:
-                    _query[data_key] = [recursive_override(item_value) for item_value in data_value]
+                    _query[data_key] = [await recursive_override(item_value) for item_value in data_value]
                 elif isinstance(data_value, PyObjectId):
                     _query[data_key] = data_value
                 else:
@@ -153,7 +153,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
                         _query[data_key] = data_value
             return _query
 
-        query = recursive_override(query)
+        query = await recursive_override(query)
 
         return recursive_replace_dates(query)
 
@@ -336,7 +336,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
             projection = self._get_projection_from_model(projection_model)
         else:
             projection = self._get_projection_from_model(self.default_model)
-        query = self.__prepare_query__(query)
+        query = await self.__prepare_query__(query)
         pipeline = await self.prepare_pipeline(projection, query)
 
         if pipeline:
@@ -404,7 +404,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
             projection = self._get_projection_from_model(projection_model)
         else:
             projection = self._get_projection_from_model(self.default_model)
-        query = self.__prepare_query__(query)
+        query = await self.__prepare_query__(query)
         pipeline = await self.prepare_pipeline(projection, query, limit, skip, sort)
 
         cursor: AsyncCursor[Any] | AsyncCommandCursor[Any]
@@ -453,7 +453,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         session: MongoAsyncClientSession | None = None,
         limit: int | None = None,
     ) -> int:
-        query = self.__prepare_query__(query)
+        query = await self.__prepare_query__(query)
         projection = self._get_projection_from_model(EmptyModel)
         pipeline = await self.prepare_pipeline(projection, query)
 
@@ -523,7 +523,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
 
         return result.inserted_ids
 
-    async def update(
+    async def update(  # noqa: C901
         self,
         query: PyObjectId | dict[str, Any],
         data: ModelType | dict[str, Any],
@@ -537,15 +537,15 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
             data = await self.validate_object_data(data)
         except ValueError as e:
             raise ObjectUpdateException(str(e)) from e
-        prepared_query = self.__prepare_query__(query)
+        prepared_query = await self.__prepare_query__(query)
 
         if isinstance(data, BaseModel):
             data = data.model_dump(exclude={'id'}, exclude_unset=exclude_unset)
 
         after_update_data = {}
 
+        now = utc_now()
         if hasattr(self.Meta, 'auto_now_fields') and self.Meta.auto_now_fields:
-            now = utc_now()
             for field in self.Meta.auto_now_fields:
                 if operator == MongoUpdateOperator.set:
                     data[field] = now
@@ -559,15 +559,24 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         elif document_count_to_update > 1:
             raise MultipleObjectsFoundException(obj_type=self.Meta.collection_name, query=prepared_query)
 
+        pre_result_projection = {'_id': 1}
+        if upsert and hasattr(self.Meta, 'auto_now_add_fields') and self.Meta.auto_now_add_fields:
+            pre_result_projection.update(dict.fromkeys(self.Meta.auto_now_add_fields, 1))
+
         result = await self.collection.find_one_and_update(
             filter=prepared_query,
             update={operator: data},
             upsert=upsert,
             return_document=ReturnDocument.AFTER,
             session=session,
-            projection={'_id': 1},
+            projection=pre_result_projection,
         )
         result_id = PyObjectId(result['_id'])
+
+        if upsert and hasattr(self.Meta, 'auto_now_add_fields') and self.Meta.auto_now_add_fields:
+            for field in self.Meta.auto_now_add_fields:
+                if result.get(field) is None:
+                    after_update_data[field] = now
 
         if result is None:
             raise ObjectUpdateException()
@@ -630,7 +639,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         *,
         session: MongoAsyncClientSession | None = None,
     ) -> int:
-        query = self.__prepare_query__(query)
+        query = await self.__prepare_query__(query)
         count = await self.count(query=query, session=session)
 
         if count == 0:
@@ -647,7 +656,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         *,
         session: MongoAsyncClientSession | None = None,
     ) -> int:
-        query = self.__prepare_query__(query)
+        query = await self.__prepare_query__(query)
         result = await self.collection.delete_many(filter=query, session=session)
         return result.deleted_count
 

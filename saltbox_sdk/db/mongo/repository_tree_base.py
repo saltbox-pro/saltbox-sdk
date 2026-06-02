@@ -215,7 +215,7 @@ class BaseTreeMongoRepository[T: BaseModel](BaseMongoRepository[T]):
         *,
         session: MongoAsyncClientSession | None = None,
     ) -> int:
-        query = self.__prepare_query__(query)
+        query = await self.__prepare_query__(query)
         projection = self._get_projection_from_model(BaseTreeModel)
         deleted_count = 0
 
