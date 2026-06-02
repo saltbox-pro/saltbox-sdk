@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 
 class AbstractAggregationStage(ABC):
@@ -22,6 +22,31 @@ class AddFieldsAggregationStage(AbstractAggregationStage):
 
     def render_stage(self) -> dict[str, Any]:
         return {'$addFields': self.fields}
+
+
+class ProjectAggregationStage(AbstractAggregationStage):
+    def __init__(self, *, fields: dict[str, Literal[0, 1] | bool | str | dict]) -> None:
+        self.fields = fields
+
+    def render_stage(self) -> dict[str, Any]:
+        return {'$project': self.fields}
+
+
+class UnsetAggregationStage(AbstractAggregationStage):
+    def __init__(self, *, fields: list[str]) -> None:
+        self.fields = fields
+
+    def render_stage(self) -> dict[str, Any]:
+        return {'$unset': self.fields}
+
+
+class GroupAggregationStage(AbstractAggregationStage):
+    def __init__(self, *, group_id: None | int | str | dict[str, Any], fields: dict[str, Any]) -> None:
+        self.group_id = group_id
+        self.fields = fields
+
+    def render_stage(self) -> dict[str, Any]:
+        return {'$group': {'_id': self.group_id, **self.fields}}
 
 
 class MatchAggregationStage(AbstractAggregationStage):
