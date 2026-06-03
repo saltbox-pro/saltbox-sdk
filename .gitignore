@@ -23,5 +23,6 @@ build/*
 /.idea
 
 # Other
+/.gitlab-ci-local
 /_*
 !.gitignore
