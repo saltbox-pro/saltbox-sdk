@@ -24,7 +24,7 @@ class SourceMixin(BaseModel):
 class SourceOnlySchema(SourceMixin): ...
 
 
-class PaginatedResponse[SchemaType: BaseModel](BaseModel):
+class PaginatedResponse[SchemaType: BaseModel | dict](BaseModel):
     total: int = Field(description='Total number of items', ge=0)
     data: list[SchemaType] = Field(description='Items list')
 
