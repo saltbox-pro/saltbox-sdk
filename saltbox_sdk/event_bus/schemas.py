@@ -1,3 +1,4 @@
+from datetime import datetime
 from enum import StrEnum
 from typing import Any
 from uuid import uuid4
@@ -16,22 +17,68 @@ class EventBusBaseMessage(BaseModel):
 # Minion_extra data
 
 
-class MinionExtraDataType(StrEnum):
+class MinionExtraDataCategoryFieldType(StrEnum):
+    STR = 'str'
+    INT = 'int'
+    FLOAT = 'float'
+    BOOL = 'bool'
+    NONE = 'none'
+    LIST = 'list'
+    DICT = 'dict'
+    BYTES = 'bytes'
+    DATETIME = 'datetime'
+
+    @property
+    def python_type(self) -> type:
+        return _PYTHON_TYPES[self]
+
+
+_PYTHON_TYPES: dict[MinionExtraDataCategoryFieldType, type] = {
+    MinionExtraDataCategoryFieldType.STR: str,
+    MinionExtraDataCategoryFieldType.INT: int,
+    MinionExtraDataCategoryFieldType.FLOAT: float,
+    MinionExtraDataCategoryFieldType.BOOL: bool,
+    MinionExtraDataCategoryFieldType.NONE: type(None),
+    MinionExtraDataCategoryFieldType.LIST: list,
+    MinionExtraDataCategoryFieldType.DICT: dict,
+    MinionExtraDataCategoryFieldType.BYTES: bytes,
+    MinionExtraDataCategoryFieldType.DATETIME: datetime,
+}
+
+
+class MinionExtraDataCategoryField(BaseModel):
+    name: str
+    types: list[MinionExtraDataCategoryFieldType] = Field(default_factory=list)
+
+
+class ExtraDataCategoryType(StrEnum):
     STATIC = 'static'
     AGGREGATED = 'aggregated'
 
 
-class MinionExtraDataItem(BaseModel):
-    category_data: dict[str, Any]
-    minion_data: dict[str, Any]
+class MinionExtraDataExtraFieldsPolicy(StrEnum):
+    IGNORE = 'ignore'
+    SAVE_TO_CATEGORY = 'save_to_category'
+    SAVE_TO_MINION = 'save_to_minion'
+
+
+class MinionExtraDataCategory(BaseModel):
+    source: str
+    name: str
+    type: ExtraDataCategoryType
+    fields: list[MinionExtraDataCategoryField] = Field(default_factory=list)
+    minion_fields: list[str] = Field(default_factory=list)
+    extra_fields_policy: MinionExtraDataExtraFieldsPolicy = Field(default=MinionExtraDataExtraFieldsPolicy.IGNORE)
+
+
+class MinionExtraCategoriesSyncMessage(EventBusBaseMessage):
+    categories: list[MinionExtraDataCategory] = Field(default_factory=list)
 
 
 class MinionExtraData(BaseModel):
+    category_source: str
     category_name: str
-    category_type: MinionExtraDataType = Field(default=MinionExtraDataType.STATIC)
-    category_fields: list[str] = Field(default_factory=list)
-    minion_fields: list[str] = Field(default_factory=list)
-    items: list[MinionExtraDataItem]
+    items: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class MinionAddOrUpdateExtraDataRequestMessage(EventBusBaseMessage):
