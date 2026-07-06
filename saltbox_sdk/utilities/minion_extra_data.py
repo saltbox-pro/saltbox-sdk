@@ -6,7 +6,7 @@ from saltbox_sdk.event_bus.schemas import MinionExtraCategoriesSyncMessage, Mini
 from saltbox_sdk.event_bus.utils import send_message
 
 
-async def extra_categories_sync(sender: str, paths_to_fixtures: list[str]) -> None:
+async def extra_categories_sync(sender: str, paths_to_fixtures: list[anyio.Path]) -> None:
     categories: list[MinionExtraDataCategory] = []
 
     for path_to_fixtures in paths_to_fixtures:
