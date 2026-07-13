@@ -209,6 +209,35 @@ class BaseTreeMongoRepository[T: BaseModel](BaseMongoRepository[T]):
 
         return ancestors_ids
 
+    async def get_descendants_ids(
+        self,
+        target: PyObjectId | ModelType,
+        include_self: bool = False,
+        *,
+        session: MongoAsyncClientSession | None = None,
+    ) -> list[PyObjectId]:
+        """Get descendants ids list for target. If `include_self` is True, target id will be included.
+        Descendants will be ordered from direct children to the last descendant.
+        """
+        descendants_ids: list[PyObjectId] = []
+        if include_self:
+            if isinstance(target, BaseModel):
+                if hasattr(target, 'id') and isinstance(target.id, PyObjectId | str | bytes | type(None)):
+                    descendants_ids.append(PyObjectId(target.id))
+                else:
+                    msg = 'Target must be have "id" field"'
+                    raise SaltBoxValidationException(msg)
+            elif isinstance(target, PyObjectId):
+                descendants_ids.append(target)
+
+        children = await self.get_children(target=target, projection_model=BaseTreeModel, session=session)
+
+        for child in children:
+            descendants_ids.append(child.id)
+            descendants_ids.extend(await self.get_descendants_ids(child, include_self=False, session=session))
+
+        return descendants_ids
+
     async def delete(
         self,
         query: PyObjectId | dict[str, Any],
