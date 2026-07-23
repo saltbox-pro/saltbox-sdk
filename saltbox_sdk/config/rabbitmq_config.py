@@ -11,7 +11,7 @@ class RabbitSettings(BaseSettings):
     port: int = 5672
     admin: str
     amqp_password: str
-    fail_fast=False,  # Keep trying to connect
+    fail_fast: bool = False  # Keep trying to connect
 
     @property
     def url(self) -> str:
