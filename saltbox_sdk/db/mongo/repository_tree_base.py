@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from pymongo.asynchronous.client_session import AsyncClientSession as MongoAsyncClientSession
 
 from saltbox_sdk.db.mongo.repository_base import BaseMongoRepository, ModelType, ProjectionModel
-from saltbox_sdk.db.mongo.schemas_base import BaseTreeModel, PyObjectId
+from saltbox_sdk.db.mongo.schemas_base import BaseTreeModel, PyObjectId, SortOrder
 from saltbox_sdk.exceptions import (
     MultipleObjectsFoundException,
     ObjectDeleteException,
@@ -29,6 +29,7 @@ class BaseTreeMongoRepository[T: BaseModel](BaseMongoRepository[T]):
         target: PyObjectId | ModelType,
         *,
         session: MongoAsyncClientSession | None = None,
+        sort: dict[str, SortOrder] | None = None,
     ) -> list[T]: ...
 
     @overload
@@ -38,6 +39,7 @@ class BaseTreeMongoRepository[T: BaseModel](BaseMongoRepository[T]):
         *,
         session: MongoAsyncClientSession | None = None,
         projection_model: type[ProjectionModel],
+        sort: dict[str, SortOrder] | None = None,
     ) -> list[ProjectionModel]: ...
 
     async def get_children(
@@ -46,6 +48,7 @@ class BaseTreeMongoRepository[T: BaseModel](BaseMongoRepository[T]):
         *,
         session: MongoAsyncClientSession | None = None,
         projection_model: type[ProjectionModel] | None = None,
+        sort: dict[str, SortOrder] | None = None,
     ) -> list[T] | list[ProjectionModel]:
         if isinstance(target, BaseModel):
             if hasattr(target, 'id'):
@@ -58,11 +61,16 @@ class BaseTreeMongoRepository[T: BaseModel](BaseMongoRepository[T]):
 
         if projection_model is not None:
             result: list[ProjectionModel] = await self.get_list(
-                query={'parent_id': target_id}, session=session, projection_model=projection_model, limit=0, skip=0
+                query={'parent_id': target_id},
+                limit=0,
+                skip=0,
+                session=session,
+                projection_model=projection_model,
+                sort=sort,
             )
             return result
         else:
-            return await self.get_list(query={'parent_id': target_id}, session=session, limit=0, skip=0)
+            return await self.get_list(query={'parent_id': target_id}, limit=0, skip=0, session=session, sort=sort)
 
     async def get_parent_id(
         self,
@@ -143,8 +151,11 @@ class BaseTreeMongoRepository[T: BaseModel](BaseMongoRepository[T]):
         children_field_name: str = 'children',
         node_id_field_name: str = 'id',
         parent_id_field_name: str = 'parent_id',
+        sort: dict[str, SortOrder] | None = None,
     ) -> list[ProjectionModel]:
-        nodes = await self.get_list(query=query, skip=0, limit=0, session=session, projection_model=projection_model)
+        nodes = await self.get_list(
+            query=query, skip=0, limit=0, session=session, projection_model=projection_model, sort=sort
+        )
         nodes_id = [getattr(node, node_id_field_name) for node in nodes]
         tree: list[ProjectionModel] = []
 

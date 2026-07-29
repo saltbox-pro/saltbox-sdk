@@ -41,7 +41,7 @@ class UnsetAggregationStage(AbstractAggregationStage):
 
 
 class GroupAggregationStage(AbstractAggregationStage):
-    def __init__(self, *, group_id: None | int | str | dict[str, Any], fields: dict[str, Any]) -> None:
+    def __init__(self, *, group_id: int | str | dict[str, Any] | None, fields: dict[str, Any]) -> None:
         self.group_id = group_id
         self.fields = fields
 
