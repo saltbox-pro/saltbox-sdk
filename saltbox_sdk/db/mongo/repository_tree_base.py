@@ -177,10 +177,13 @@ class BaseTreeMongoRepository[T: BaseModel](BaseMongoRepository[T]):
                 tree.append(node)
                 continue
 
+            node_found = False
             for tree_node in tree:
                 if add_node_recursive(node, tree_node):
+                    node_found = True
                     break
 
+            if not node_found:
                 nodes.append(node)
 
         return tree
