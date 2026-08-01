@@ -156,35 +156,20 @@ class BaseTreeMongoRepository[T: BaseModel](BaseMongoRepository[T]):
         nodes = await self.get_list(
             query=query, skip=0, limit=0, session=session, projection_model=projection_model, sort=sort
         )
-        nodes_id = [getattr(node, node_id_field_name) for node in nodes]
+
+        nodes_by_id: dict[Any, ProjectionModel] = {}
+        for node in nodes:
+            setattr(node, children_field_name, [])
+            nodes_by_id[getattr(node, node_id_field_name)] = node
+
         tree: list[ProjectionModel] = []
 
-        def add_node_recursive(new_node: ProjectionModel, parent_node: ProjectionModel) -> bool:
-            if getattr(parent_node, node_id_field_name) == getattr(new_node, parent_id_field_name):
-                getattr(parent_node, children_field_name).append(new_node)
-                return True
-
-            for child_node in getattr(parent_node, children_field_name, []):
-                if add_node_recursive(new_node, child_node):
-                    return True
-
-            return False
-
-        while len(nodes) > 0:
-            node = nodes.pop(0)
-
-            if getattr(node, parent_id_field_name, None) not in nodes_id:
+        for node in nodes:
+            parent = nodes_by_id.get(getattr(node, parent_id_field_name, None))
+            if parent is None:
                 tree.append(node)
-                continue
-
-            node_found = False
-            for tree_node in tree:
-                if add_node_recursive(node, tree_node):
-                    node_found = True
-                    break
-
-            if not node_found:
-                nodes.append(node)
+            else:
+                getattr(parent, children_field_name).append(node)
 
         return tree
 
