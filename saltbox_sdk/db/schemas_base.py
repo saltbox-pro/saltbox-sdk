@@ -17,8 +17,11 @@ class Source(BaseModel):
     id: str | None = Field(title='Source id', default=None)
 
 
+DEFAULT_SOURCE = Source(type='system')
+
+
 class SourceMixin(BaseModel):
-    source: Source | None = Field(title='Source', default=None)
+    source: Source = Field(title='Source', default=DEFAULT_SOURCE)
 
 
 class SourceOnlySchema(SourceMixin): ...
