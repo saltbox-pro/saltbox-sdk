@@ -23,6 +23,7 @@ build/*
 /.idea
 
 # Other
+.DS_Store
 /.gitlab-ci-local
 /_*
 !.gitignore

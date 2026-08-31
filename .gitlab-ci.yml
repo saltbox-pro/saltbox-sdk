@@ -2,10 +2,14 @@
 
 stages:
   - test
+  - build
 
 include:
   - project: 'saltbox/ci-lib'
     file: 'def-branch-merge-guard.yml'
+
+  - project: 'saltbox/ci-lib'
+    file: 'mirror-repo.yml'
 
 
 .python-base:
@@ -34,3 +38,8 @@ Mypy:
   extends: .python-base
   script:
     mypy saltbox_sdk
+
+
+Mirror Repository:
+  extends: .mirror-repo
+  stage: build
