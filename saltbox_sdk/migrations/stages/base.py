@@ -1,4 +1,5 @@
 import abc
+import inspect
 from collections.abc import Callable
 from typing import Any
 
@@ -13,4 +14,9 @@ class RunPythonMigrationStage(BaseMigrationStage):
         self.callback = callback
 
     async def process(self) -> Any:
-        return self.callback()
+        result = self.callback()
+
+        if inspect.isawaitable(result):
+            return await result
+
+        return result
