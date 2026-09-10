@@ -11,6 +11,9 @@ include:
   - project: 'saltbox/ci-lib'
     file: 'mirror-repo.yml'
 
+  - project: 'saltbox/ci-lib'
+    file: 'close-github-pr.yml'
+
 
 .python-base:
   stage: test
@@ -42,4 +45,9 @@ Mypy:
 
 Mirror Repository:
   extends: .mirror-repo
+  stage: build
+
+
+Check for GitHub PR to close:
+  extends: .close-github-pr
   stage: build
