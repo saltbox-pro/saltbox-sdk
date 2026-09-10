@@ -295,15 +295,20 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
             path = []
 
         for field_name, field in model.model_fields.items():
+            if field.alias:
+                computed_field_name = field.alias
+            else:
+                computed_field_name = field_name
+
             if field.annotation and isclass(field.annotation) and issubclass(field.annotation, BaseModel):
                 sub_model = field.annotation
+
+                if sub_model.model_config.get('extra') == 'allow':
+                    projection['.'.join([*path, computed_field_name])] = 1
+                    continue
+
                 projection.update(cls._get_projection_from_model(sub_model, [*path, field_name]))
             else:
-                if field.alias:
-                    computed_field_name = field.alias
-                else:
-                    computed_field_name = field_name
-
                 projection['.'.join([*path, computed_field_name])] = 1
 
         return projection
