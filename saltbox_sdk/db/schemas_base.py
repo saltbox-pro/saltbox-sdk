@@ -37,14 +37,6 @@ class CursoredResponse[SchemaType: BaseModel](BaseModel):
     data: list[SchemaType] = Field(description='Items list')
 
 
-class CursoredTimeseriesResponse[SchemaType: BaseModel](BaseModel):
-    next_cursor: TimezoneAwareDatetime | None = Field(
-        description='Timestamp of the last item; pass as time_from for the next page. None means no more data.',
-        default=None,
-    )
-    data: list[SchemaType] = Field(description='Items list')
-
-
 class SkipLimitParams(BaseModel):
     skip: int = Field(default=0, ge=0)
     limit: int = Field(default=0, ge=0)

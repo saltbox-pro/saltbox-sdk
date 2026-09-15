@@ -50,7 +50,6 @@ class AuditContextMiddleware(BaseHTTPMiddleware):
         self.add_to_response = add_to_response
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
-        logger.debug('Processing request in AuditContextMiddleware')
         correlation_id = self._get_or_generate_correlation_id(request)
 
         audit_ctx = AuditRequestContext(
@@ -63,11 +62,10 @@ class AuditContextMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
             response_correlation_id = response.headers.get('X-Request-ID')
             if correlation_id != response_correlation_id:
-                logger.warning(
+                logger.debug(
                     f'Corr ID in response ({response_correlation_id}) does not match request context ({correlation_id})'
                 )
-            else:
-                logger.info('Correlation ID in response matches request context')
+
         finally:
             _audit_ctx.reset(token)
 
@@ -101,12 +99,12 @@ class AuditContextMiddleware(BaseHTTPMiddleware):
         correlation_id = request.headers.get('X-Request-ID')
 
         if correlation_id and (('\n' in correlation_id) or ('\r' in correlation_id) or (len(correlation_id) > 200)):
-            logger.warning('Invalid correlation ID in request headers; ignoring')
+            # logger.warning('Invalid correlation ID in request headers; ignoring')
             correlation_id = None
 
         if not correlation_id and self.gen_cor_id_if_missing:
             correlation_id = str(uuid4())
-            logger.debug(f'Generated new correlation ID: {correlation_id}')
+            # logger.debug(f'Generated new correlation ID: {correlation_id}')
 
         return correlation_id
 

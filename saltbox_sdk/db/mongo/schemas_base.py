@@ -14,6 +14,7 @@ from pydantic_core.core_schema import (
 )
 
 from saltbox_sdk.db.schemas_base import SourceOnlySchema
+from saltbox_sdk.utilities.helpers import Iso8601ZDatetime
 
 IS_PYDANTIC_V2_10 = int(pydantic.VERSION.split('.')[0]) >= 2 and int(pydantic.VERSION.split('.')[1]) >= 10
 ALLOWED_MONGO_PIPELINE_QUERY_KEYS = [
@@ -197,4 +198,15 @@ class TimeSeriesConfig(TypedDict):
     metaField: NotRequired[str]
     granularity: NotRequired[Literal['seconds', 'minutes', 'hours']]
     bucketMaxSpanSeconds: NotRequired[int]
-    bucketRoundingSeconds: NotRequired[int]  # опционально, если нужен точный контроль окон
+    bucketRoundingSeconds: NotRequired[int]
+
+
+class TimeseriesCursor(BaseModel):
+    time: Iso8601ZDatetime
+    id: PyObjectId
+
+
+class CursoredTimeseriesResponse[SchemaType: BaseModel](BaseModel):
+    next_cursor: TimeseriesCursor | None = Field(default=None)
+    previous_cursor: TimeseriesCursor | None = Field(default=None)
+    data: list[SchemaType] = Field(description='Items list')
