@@ -33,33 +33,41 @@ class MongoTimeseriesBaseService[
         time_f = self.repo.Meta.timeseries['timeField']
         going_backward = False
 
+        base_sort = sort or {time_f: SortOrder.ASC, '_id': SortOrder.ASC}
+        time_ascending = base_sort.get(time_f, SortOrder.ASC) == SortOrder.ASC
+        id_ascending = base_sort.get('_id', SortOrder.ASC) == SortOrder.ASC
+
         query_parts: list[dict] = [{time_f: {'$gte': time_from, '$lt': time_to}}]
         if query:
             query_parts.append(query)
 
         if after is not None:
+            time_op = '$gt' if time_ascending else '$lt'
+            id_op = '$gt' if id_ascending else '$lt'
             query_parts.append(
                 {
                     '$or': [
-                        {time_f: {'$gt': after.time}},
-                        {time_f: after.time, '_id': {'$gt': after.id}},
+                        {time_f: {time_op: after.time}},
+                        {time_f: after.time, '_id': {id_op: after.id}},
                     ]
                 }
             )
         elif before is not None:
             going_backward = True
+            time_op = '$lt' if time_ascending else '$gt'
+            id_op = '$lt' if id_ascending else '$gt'
             query_parts.append(
                 {
                     '$or': [
-                        {time_f: {'$lt': before.time}},
-                        {time_f: before.time, '_id': {'$lt': before.id}},
+                        {time_f: {time_op: before.time}},
+                        {time_f: before.time, '_id': {id_op: before.id}},
                     ]
                 }
             )
 
         result_query: MongoQuery = {'$and': query_parts}
 
-        fetch_sort = sort or {time_f: SortOrder.ASC, '_id': SortOrder.ASC}
+        fetch_sort = dict(base_sort)
         if going_backward:
             fetch_sort = {k: SortOrder(-v.value) for k, v in fetch_sort.items()}
 
