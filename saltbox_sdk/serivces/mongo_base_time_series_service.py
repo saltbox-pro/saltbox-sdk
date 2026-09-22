@@ -10,7 +10,6 @@ from saltbox_sdk.db.mongo.schemas_base import (
     TimeseriesCursor,
 )
 from saltbox_sdk.serivces.mongo_base_service import MongoBaseService
-from saltbox_sdk.utilities.helpers import Iso8601ZDatetime
 
 
 class MongoTimeseriesBaseService[
@@ -20,8 +19,6 @@ class MongoTimeseriesBaseService[
 ](MongoBaseService[Repository, ModelType, CreateSchema, BaseModel]):
     async def get_list_in_range_paginated(
         self,
-        time_from: Iso8601ZDatetime,
-        time_to: Iso8601ZDatetime,
         *,
         query: MongoQuery,
         limit: int = 50,
@@ -37,7 +34,7 @@ class MongoTimeseriesBaseService[
         time_ascending = base_sort.get(time_f, SortOrder.ASC) == SortOrder.ASC
         id_ascending = base_sort.get('_id', SortOrder.ASC) == SortOrder.ASC
 
-        query_parts: list[dict] = [{time_f: {'$gte': time_from, '$lt': time_to}}]
+        query_parts: list[dict] = []
         if query:
             query_parts.append(query)
 
@@ -65,7 +62,7 @@ class MongoTimeseriesBaseService[
                 }
             )
 
-        result_query: MongoQuery = {'$and': query_parts}
+        result_query: MongoQuery = {'$and': query_parts} if query_parts else {}
 
         fetch_sort = dict(base_sort)
         if going_backward:
