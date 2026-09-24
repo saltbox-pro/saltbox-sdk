@@ -45,6 +45,13 @@ class UserHeadersMissingException(SaltBoxBaseException):
     detail: str = 'Required user headers are missing from the request.'
 
 
+class PermissionDeniedException(SaltBoxBaseException):
+    """Raised when an operation is not allowed on a given resource."""
+
+    status_code: int = status.HTTP_403_FORBIDDEN
+    detail: str = 'Operation not allowed on this resource.'
+
+
 # Base exceptions
 class NotFoundException(SaltBoxBaseException):
     """Raised when a requested resource is not found."""

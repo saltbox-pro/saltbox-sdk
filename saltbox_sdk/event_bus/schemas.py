@@ -69,6 +69,7 @@ class MinionExtraDataCategory(BaseModel):
     fields: list[MinionExtraDataCategoryField] = Field(default_factory=list)
     minion_fields: list[str] = Field(default_factory=list)
     extra_fields_policy: MinionExtraDataExtraFieldsPolicy = Field(default=MinionExtraDataExtraFieldsPolicy.IGNORE)
+    is_manual_data_allowed: bool | None = Field(default=None)
 
 
 class MinionExtraCategoriesSyncMessage(EventBusBaseMessage):
