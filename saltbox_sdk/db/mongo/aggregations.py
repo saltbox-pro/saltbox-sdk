@@ -1,3 +1,4 @@
+import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Literal
@@ -120,6 +121,25 @@ class UnwindAggregationStage(AbstractAggregationStage):
             result['includeArrayIndex'] = self.include_array_index
 
         return {'$unwind': result}
+
+
+class AnySearchAggregationStage(AbstractAggregationStage):
+    def __init__(self, *, search: str, escape: bool = True) -> None:
+        self.search = search
+        self.escape = escape
+
+    def render_stage(self) -> dict[str, Any]:
+        value_as_string = {'$convert': {'input': '$$kv.v', 'to': 'string', 'onError': '', 'onNull': ''}}
+        regex = re.escape(self.search) if self.escape else self.search
+        search_match = {'$regexMatch': {'input': value_as_string, 'regex': regex, 'options': 'i'}}
+
+        return {
+            '$match': {
+                '$expr': {
+                    '$anyElementTrue': {'$map': {'input': {'$objectToArray': '$$ROOT'}, 'as': 'kv', 'in': search_match}}
+                }
+            }
+        }
 
 
 @dataclass

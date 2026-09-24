@@ -1,3 +1,4 @@
+from collections.abc import AsyncIterator
 from enum import StrEnum
 from inspect import isclass
 from re import Match, Pattern
@@ -676,6 +677,48 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
             return await cursor.to_list()
         except OperationFailure as e:
             msg = f'Error during pipeline execution in aggregate: {e}'
+            raise MongoPipelineException(msg) from None
+
+    async def aggregate_paginated(
+        self,
+        pipeline: list[dict],
+        skip: int = 0,
+        limit: int = 0,
+        *,
+        session: MongoAsyncClientSession | None = None,
+    ) -> tuple[int, list[dict[str, Any]]]:
+        page: list[dict[str, Any]] = [{'$skip': skip}]
+        if limit:
+            page.append({'$limit': limit})
+
+        try:
+            cursor = await self.collection.aggregate(
+                pipeline=[*pipeline, {'$facet': {'total': [{'$count': 'total'}], 'data': page}}],
+                session=session,
+                allowDiskUse=True,
+            )
+            result = await cursor.to_list()
+        except OperationFailure as e:
+            msg = f'Error during pipeline execution in aggregate_paginated: {e}'
+            raise MongoPipelineException(msg) from None
+
+        facet = result[0] if result else {'total': [], 'data': []}
+        total = facet['total'][0]['total'] if facet['total'] else 0
+
+        return total, facet['data']
+
+    async def aggregate_iter(
+        self,
+        pipeline: list[dict],
+        *,
+        session: MongoAsyncClientSession | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        try:
+            cursor = await self.collection.aggregate(pipeline=pipeline, session=session, allowDiskUse=True)
+            async for document in cursor:
+                yield document
+        except OperationFailure as e:
+            msg = f'Error during pipeline execution in aggregate_iter: {e}'
             raise MongoPipelineException(msg) from None
 
     async def _update_indexes(self) -> None:

@@ -8,22 +8,13 @@ except ImportError:
     else:
         ObjectId = None
 from fastapi import Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 
 from saltbox_sdk.config.logger_config import logger
 from saltbox_sdk.exceptions import SaltBoxBaseException
 
-
-def convert_objectids(obj: Any) -> Any:
-    if ObjectId is None:
-        return obj
-    if isinstance(obj, ObjectId):
-        return str(obj)
-    if isinstance(obj, dict):
-        return {k: convert_objectids(v) for k, v in obj.items()}
-    if isinstance(obj, list):
-        return [convert_objectids(i) for i in obj]
-    return obj
+CUSTOM_ENCODERS: dict[Any, Any] = {ObjectId: str} if ObjectId is not None else {}
 
 
 async def custom_http_handler(_: Request, exc: Exception) -> JSONResponse:  # noqa: RUF029,RUF100
@@ -47,7 +38,7 @@ async def custom_http_handler(_: Request, exc: Exception) -> JSONResponse:  # no
         'detail': getattr(exc, 'detail', str(exc)),
     }
 
-    content = convert_objectids(content)
+    content = jsonable_encoder(content, custom_encoder=CUSTOM_ENCODERS)
 
     return JSONResponse(
         status_code=getattr(exc, 'status_code', status_code),
