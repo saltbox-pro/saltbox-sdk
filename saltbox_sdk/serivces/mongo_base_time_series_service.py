@@ -30,7 +30,7 @@ class MongoTimeseriesBaseService[
         time_f = self.repo.Meta.timeseries['timeField']
         going_backward = False
 
-        base_sort = sort or {time_f: SortOrder.ASC, '_id': SortOrder.ASC}
+        base_sort = sort or {time_f: SortOrder.DESC, '_id': SortOrder.DESC}
         time_ascending = base_sort.get(time_f, SortOrder.ASC) == SortOrder.ASC
         id_ascending = base_sort.get('_id', SortOrder.ASC) == SortOrder.ASC
 
