@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Added
 
+- Add `mongo_uri` to `MongoSettings` to override the built connection URL.
+- Allow comma-separated list of hosts (with optional `:port`) in `mongo_host`.
 - Add detailed key value information to `DuplicateKeyException` and log duplicate key details during database errors.
 - Add `SortOrder` enum and update repository/service APIs to support sorting direction (`SortOrder`) for `get_list` and repository methods.
 - Add `user` and `sender` fields to `EventBusBaseMessage` and add `task_id` to `RunTaskEventBusMessage`.
@@ -40,6 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Pass mongo credentials to the client as `username`/`password` arguments instead of embedding them in the connection URL.
 - Move default arguments into the `key` argument for `OPAConfig` and `GatewayEndpointConfig` to simplify configuration mapping.
 - Simplify `OPAConfig` handling (see Removed) and introduce `get_opa_query` helper; update `DiscoveryClient` and callers to use the new OPA flow.
 - Refactor configuration and discovery surface: introduce `server_outer_socket`, `server_scheme`, `server_ws_scheme`, `KeycloakSettings`, and more precise `DiscoverySettings`; update `DiscoveryClient` to construct URLs from configurable paths for docs, OpenAPI and health checks.

@@ -7,6 +7,7 @@ ENV_FILE = Path(os.environ.get('SALTBOX_ENV_FILE', '.env'))
 
 
 class MongoSettings(BaseSettings):
+    mongo_uri: str | None = None
     mongo_db: str = ''
     mongo_host: str = 'mongo'
     mongo_password: str | None = None
@@ -17,7 +18,14 @@ class MongoSettings(BaseSettings):
 
     @property
     def mongo_url(self) -> str:
-        url = f'mongodb://{self.mongo_user}:{self.mongo_password}@{self.mongo_host}:{self.mongo_port}/'
+        if self.mongo_uri:
+            return self.mongo_uri
+
+        hosts = ','.join(
+            host if ':' in host else f'{host}:{self.mongo_port}'
+            for host in (host.strip() for host in self.mongo_host.split(','))
+        )
+        url = f'mongodb://{hosts}/'
 
         if self.mongo_replicaset is not None:
             url += f'?replicaSet={self.mongo_replicaset}'
