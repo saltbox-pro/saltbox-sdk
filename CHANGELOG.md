@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Added
 
+- Add `title`, `description`, `icon` and `is_single_item` to `MinionExtraDataCategory`.
 - Add `mongo_uri` to `MongoSettings` to override the built connection URL.
 - Allow comma-separated list of hosts (with optional `:port`) in `mongo_host`.
 - Add detailed key value information to `DuplicateKeyException` and log duplicate key details during database errors.

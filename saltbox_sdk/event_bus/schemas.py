@@ -70,6 +70,10 @@ class MinionExtraDataCategory(BaseModel):
     minion_fields: list[str] = Field(default_factory=list)
     extra_fields_policy: MinionExtraDataExtraFieldsPolicy = Field(default=MinionExtraDataExtraFieldsPolicy.IGNORE)
     is_manual_data_allowed: bool | None = Field(default=None)
+    title: dict[str, str] | None = Field(default=None)
+    description: dict[str, str] | None = Field(default=None)
+    icon: str | None = Field(default=None)
+    is_single_item: bool = Field(default=False)
 
 
 class MinionExtraCategoriesSyncMessage(EventBusBaseMessage):
