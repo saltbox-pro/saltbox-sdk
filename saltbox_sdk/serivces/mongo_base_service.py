@@ -1,3 +1,4 @@
+from collections.abc import AsyncIterator
 from typing import Any, TypeVar, overload
 
 from pydantic import BaseModel
@@ -92,6 +93,48 @@ class MongoBaseService[
             return result
 
         return await self.repo.get_list(query=query, sort=sort, limit=limit, skip=skip, session=session)
+
+    @overload
+    def iter_list(
+        self,
+        query: Any,
+        limit: int = 0,
+        skip: int = 0,
+        *,
+        session: MongoAsyncClientSession | None = None,
+        sort: dict[str, SortOrder] | None = None,
+    ) -> AsyncIterator[ModelType]: ...
+
+    @overload
+    def iter_list(
+        self,
+        query: Any,
+        limit: int = 0,
+        skip: int = 0,
+        *,
+        session: MongoAsyncClientSession | None = None,
+        projection_model: type[ProjectionModel] = StubDefault,
+        sort: dict[str, SortOrder] | None = None,
+    ) -> AsyncIterator[ProjectionModel]: ...
+
+    async def iter_list(
+        self,
+        query: Any,
+        limit: int = 0,
+        skip: int = 0,
+        *,
+        session: MongoAsyncClientSession | None = None,
+        projection_model: type[ProjectionModel] | None = None,
+        sort: dict[str, SortOrder] | None = None,
+    ) -> AsyncIterator[ModelType] | AsyncIterator[ProjectionModel]:
+        if projection_model:
+            async for item in self.repo.iter_list(
+                query=query, sort=sort, limit=limit, skip=skip, projection_model=projection_model, session=session
+            ):
+                yield item
+        else:
+            async for item in self.repo.iter_list(query=query, sort=sort, limit=limit, skip=skip, session=session):
+                yield item
 
     async def create(
         self,

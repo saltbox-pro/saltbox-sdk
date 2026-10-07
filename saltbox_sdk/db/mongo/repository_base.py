@@ -407,6 +407,49 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         sort: dict[str, SortOrder] | None = None,
     ) -> list[T] | list[ProjectionModel]:
         if projection_model:
+            return [
+                item
+                async for item in self.iter_list(
+                    query, limit, skip, session=session, projection_model=projection_model, sort=sort
+                )
+            ]
+
+        return [item async for item in self.iter_list(query, limit, skip, session=session, sort=sort)]
+
+    @overload
+    def iter_list(
+        self,
+        query: dict[str, Any] | None,
+        limit: int = 0,
+        skip: int = 0,
+        *,
+        session: MongoAsyncClientSession | None = None,
+        sort: dict[str, SortOrder] | None = None,
+    ) -> AsyncIterator[T]: ...
+
+    @overload
+    def iter_list(
+        self,
+        query: dict[str, Any] | None,
+        limit: int = 0,
+        skip: int = 0,
+        *,
+        session: MongoAsyncClientSession | None = None,
+        projection_model: type[ProjectionModel],
+        sort: dict[str, SortOrder] | None = None,
+    ) -> AsyncIterator[ProjectionModel]: ...
+
+    async def iter_list(
+        self,
+        query: dict[str, Any] | None = None,
+        limit: int = 0,
+        skip: int = 0,
+        *,
+        session: MongoAsyncClientSession | None = None,
+        projection_model: type[ProjectionModel] | None = None,
+        sort: dict[str, SortOrder] | None = None,
+    ) -> AsyncIterator[T] | AsyncIterator[ProjectionModel]:
+        if projection_model:
             projection = self._get_projection_from_model(projection_model)
         else:
             projection = self._get_projection_from_model(self.default_model)
@@ -437,20 +480,15 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
                 explanation = await cursor.explain()
                 logger.debug(explanation)
 
-        if projection_model:
-            return [
-                projection_model.model_validate(
+        async for doc in cursor:
+            if projection_model:
+                yield projection_model.model_validate(
                     await self.prepare_object_data(data=doc, projection_model=projection_model)
                 )
-                for doc in await cursor.to_list()
-            ]
-        else:
-            return [
-                self.default_model.model_validate(
+            else:
+                yield self.default_model.model_validate(
                     await self.prepare_object_data(data=doc, projection_model=self.default_model)
                 )
-                for doc in await cursor.to_list()
-            ]
 
     async def count(
         self,
