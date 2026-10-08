@@ -198,11 +198,8 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         sort: dict[str, SortOrder] | None = None,
     ) -> list[dict[str, Any]]:
         pipeline: list[dict] = []
-        query_pipline: list[dict] = []
-
-        if query:
-            query_fields = [field[0] for field in self._extract_fields_from_query(query)]
-            query_pipline = self.aggregations.build_pipeline(fields_names=query_fields)
+        query_fields = [field[0] for field in self._extract_fields_from_query(query or {})] + list(sort or {})
+        query_pipline: list[dict] = self.aggregations.build_pipeline(fields_names=query_fields)
 
         project_pipline: list[dict] = self.aggregations.build_pipeline(
             fields_names=list(projection.keys()), stages_to_exclude=query_pipline
