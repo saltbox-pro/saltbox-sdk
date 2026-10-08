@@ -22,7 +22,6 @@ class MinionExtraDataCategoryFieldType(StrEnum):
     INT = 'int'
     FLOAT = 'float'
     BOOL = 'bool'
-    NONE = 'none'
     LIST = 'list'
     DICT = 'dict'
     BYTES = 'bytes'
@@ -38,7 +37,6 @@ _PYTHON_TYPES: dict[MinionExtraDataCategoryFieldType, type] = {
     MinionExtraDataCategoryFieldType.INT: int,
     MinionExtraDataCategoryFieldType.FLOAT: float,
     MinionExtraDataCategoryFieldType.BOOL: bool,
-    MinionExtraDataCategoryFieldType.NONE: type(None),
     MinionExtraDataCategoryFieldType.LIST: list,
     MinionExtraDataCategoryFieldType.DICT: dict,
     MinionExtraDataCategoryFieldType.BYTES: bytes,
@@ -48,7 +46,9 @@ _PYTHON_TYPES: dict[MinionExtraDataCategoryFieldType, type] = {
 
 class MinionExtraDataCategoryField(BaseModel):
     name: str
-    types: list[MinionExtraDataCategoryFieldType] = Field(default_factory=list)
+    type: MinionExtraDataCategoryFieldType
+    is_empty_allowed: bool = Field(default=True)
+    is_minion_field: bool = Field(default=False)
 
 
 class ExtraDataCategoryType(StrEnum):
@@ -67,7 +67,6 @@ class MinionExtraDataCategory(BaseModel):
     name: str
     type: ExtraDataCategoryType
     fields: list[MinionExtraDataCategoryField] = Field(default_factory=list)
-    minion_fields: list[str] = Field(default_factory=list)
     extra_fields_policy: MinionExtraDataExtraFieldsPolicy = Field(default=MinionExtraDataExtraFieldsPolicy.IGNORE)
     is_manual_data_allowed: bool | None = Field(default=None)
     title: dict[str, str] | None = Field(default=None)
