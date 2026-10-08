@@ -112,14 +112,18 @@ class AuditCategory(StrEnum):
 
 
 class AuditResourceType(StrEnum):
-    API_ENDPOINT = 'api_endpoint'
-    USER = 'user'
-    MINION = 'minion'
-    COLLECTION = 'collection'
-    POLICY = 'opa_policy'
-    TASK = 'task'
-    JOB = 'job'
-    SCHEDULE = 'schedule'
+    API_ENDPOINTS = 'api_endpoints'
+    USERS = 'users'
+    MINION = 'minions'
+    COLLECTIONS = 'collections'
+    POLICIES = 'opa_policies'
+    TASKS = 'tasks'
+    JOBS = 'jobs'
+    EXTRA_DATA = 'extra_data'
+    MASTERS = 'masters'
+    FILTERS = 'filters'
+    PILLARS = 'pillars'
+    SALT = 'salt'
     UNKNOWN = 'unknown'
 
 
@@ -158,7 +162,7 @@ class AuditEventSchema(BaseModel):
     subject_type: AuditSubjectType | None = None
 
     # Object
-    resource_type: AuditResourceType = Field(
+    resource_type: AuditResourceType | str = Field(
         default=AuditResourceType.UNKNOWN,
         description='Type of the resource involved in the event, e.g. "collection", "task", "job"',
     )

@@ -6,6 +6,7 @@ from fastapi import Request
 from saltbox_sdk.config.logger_config import logger
 from saltbox_sdk.db.schemas_base import UserShort
 from saltbox_sdk.exceptions import UserHeadersMissingException
+from saltbox_sdk.utilities.audit import AuditEventPublisher
 
 
 async def get_current_user(request: Request) -> UserShort:
@@ -29,3 +30,11 @@ async def get_opa_query(request: Request) -> dict:
     query = json.loads(query_str) if query_str else {}
     logger.info(f'OPA query: {query}')
     return query
+
+
+async def get_audit_publisher(request: Request) -> AuditEventPublisher | None:
+    if not hasattr(request.app.state, 'audit_service'):
+        logger.error('Audit service is not initialized.')
+        return None
+    audit_publisher: AuditEventPublisher = request.app.state.audit_service
+    return audit_publisher
