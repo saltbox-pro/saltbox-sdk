@@ -33,8 +33,8 @@ async def get_opa_query(request: Request) -> dict:
 
 
 async def get_audit_publisher(request: Request) -> AuditEventPublisher | None:
-    if not hasattr(request.app.state, 'audit_service'):
+    if not hasattr(request.app.state, 'audit_publisher'):
         logger.error('Audit service is not initialized.')
         return None
-    audit_publisher: AuditEventPublisher = request.app.state.audit_service
+    audit_publisher: AuditEventPublisher = request.app.state.audit_publisher
     return audit_publisher
