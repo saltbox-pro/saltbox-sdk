@@ -43,6 +43,11 @@ class LogConfig(BaseModel):
             'level': LOG_LEVEL,
             'propagate': False,
         },
+        'aiormq': {
+            'handlers': ['default'],
+            'level': 'CRITICAL',
+            'propagate': False,
+        }
     }
 
 

@@ -28,6 +28,7 @@ dev = [
 ]
 event-bus = [
   "faststream[rabbit]==0.5.48",
+  "aio-pika~=9.6.2",
 ]
 mongo = [
   "pymongo~=4.14.1",
@@ -52,6 +53,7 @@ dev = [
 ]
 event-bus = [
   "faststream[rabbit]==0.5.48",
+  "aio-pika~=9.6.2",
 ]
 mongo = [
   "pymongo~=4.14.1",
