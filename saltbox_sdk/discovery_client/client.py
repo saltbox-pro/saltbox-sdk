@@ -54,7 +54,7 @@ class DiscoveryClient:
                 return f.read().strip()
         instance_id = str(uuid.uuid4())
         with Path.open(file_path, 'w') as f:
-            f.write(instance_id)
+            _ = f.write(instance_id)
         logger.debug(f'Generated new instance ID: {instance_id}')
         return instance_id
 
@@ -84,8 +84,9 @@ class DiscoveryClient:
         return endpoints
 
     async def _create_service_object(self) -> ServiceSchema:
-        """Creates a service object from the configuration."""
         endpoints = await self._get_endpoints_from_openapi()
+
+        # TODO: temporary disabled
         # host = DISCOVERY_SETTINGS.instance_host if DISCOVERY_SETTINGS.is_external else socket.gethostname()
 
         instance = ServiceInstance(
@@ -157,11 +158,9 @@ class DiscoveryClient:
                     await self._httpx_client.aclose()
 
     async def check_discovery_service(self) -> bool:
-        """Проверяет доступность сервиса Discovery"""
         try:
             logger.debug('Checking Discovery service availability on %s/health', DISCOVERY_SETTINGS.discovery_url)
             response = await self._httpx_client.get(f'{DISCOVERY_SETTINGS.discovery_url}/health', timeout=2.0)
             return response.status_code == 200
-        except Exception as e:
-            logger.error(f'Error checking discovery service: {e}')
+        except Exception:
             return False
