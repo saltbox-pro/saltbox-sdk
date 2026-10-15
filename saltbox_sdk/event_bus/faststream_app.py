@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from faststream import FastStream
 from faststream.broker.types import BrokerMiddleware
 from faststream.rabbit import RabbitBroker
@@ -5,12 +7,17 @@ from faststream.types import Lifespan
 
 from saltbox_sdk.config.rabbitmq_config import RABBIT_SETTINGS
 
+RABBITMQ_RECONNECT_INTERVAL: timedelta = timedelta(seconds=5)
 
 def get_faststream_broker(middlewares: list[BrokerMiddleware] | None = None) -> RabbitBroker:
     if middlewares:
         return RabbitBroker(url=RABBIT_SETTINGS.url, middlewares=middlewares)
 
-    return RabbitBroker(url=RABBIT_SETTINGS.url)
+    return RabbitBroker(
+        url=RABBIT_SETTINGS.url,
+        fail_fast=False,
+        reconnect_interval=RABBITMQ_RECONNECT_INTERVAL.total_seconds()
+    )
 
 
 def get_faststream_app(
