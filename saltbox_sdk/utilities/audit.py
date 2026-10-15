@@ -1,6 +1,7 @@
 import asyncio
 from typing import Any
 
+from aiormq.exceptions import AMQPConnectionError
 from faststream.rabbit import RabbitBroker
 
 from saltbox_sdk.config.logger_config import logger
@@ -23,7 +24,7 @@ class AuditEventPublisher:
 
     async def start(self) -> None:
         self.task_group = asyncio.TaskGroup()
-        await self.task_group.__aenter__()
+        _ = await self.task_group.__aenter__()
         logger.info('Audit service started.')
 
     async def stop(self) -> None:
@@ -38,13 +39,15 @@ class AuditEventPublisher:
         if self.task_group is None:
             logger.warning('Audit service is not running. Cannot publish event.')
             return
-        self.task_group.create_task(self._publish(event))
+        _ = self.task_group.create_task(self._publish(event))
 
     async def _publish(self, event: AuditEventSchema) -> None:
         async with self.semaphore:
             try:
-                await self._broker.publish(event, queue='audit_events')
+                _ = await self._broker.publish(event, queue='audit_events')
                 logger.info('Published audit event: %s', event)
+            except AMQPConnectionError as e:
+                logger.warning(f'RabbitMQ is unavailable during startup: {e}. The broker will reconnect automatically.')
             except Exception as e:
                 logger.error('Failed to publish audit event: %s', e)
 
