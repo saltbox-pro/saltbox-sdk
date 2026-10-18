@@ -6,16 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
 ### Added
 
 - Add `title`, `description`, `icon` and `is_single_item` to `MinionExtraDataCategory`.
 - Add `mongo_uri` to `MongoSettings` to override the built connection URL.
 - Allow comma-separated list of hosts (with optional `:port`) in `mongo_host`.
 - Add detailed key value information to `DuplicateKeyException` and log duplicate key details during database errors.
-- Add `SortOrder` enum and update repository/service APIs to support sorting direction (`SortOrder`) for `get_list` and repository methods.
+- Add `SortOrder` enum and update repository/service APIs to support sorting direction (`SortOrder`) for `get_list` and
+  repository methods.
 - Add `user` and `sender` fields to `EventBusBaseMessage` and add `task_id` to `RunTaskEventBusMessage`.
 - Add `instance_id` to `DiscoverySettings` and make `DiscoveryClient` use it when publishing/constructing instance URLs.
-- Add `exchange` argument to `send_rpc_message` and `send_message`, and add `broker` parameter to `get_faststream_app` to support flexible routing.
+- Add `exchange` argument to `send_rpc_message` and `send_message`, and add `broker` parameter to `get_faststream_app`
+  to support flexible routing.
 - Add RabbitMQ-based event bus integration and common scheduler logic for scheduled tasks.
 - Add `ANONYMOUS_SHORT_USER`, `SYSTEM_USER` and `SYSTEM_SHORT_USER` constants for standardized system/user identifiers.
 - Add `MongoQueryField` and `match_query` utility to support mongo-like query filtering in tests and services.
@@ -40,18 +43,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `is_external` flag to `DiscoverySettings`.
 - Add `instance_base_route` to `DiscoverySettings`.
 - Add merge guard to prevent unintended merges.
+- Add `move` to `BaseTreeMongoRepository` with optional siblings ordering by `Meta.order_field_name`.
+- Add `Meta.parent_field_name` and `Meta.order_field_name` to `BaseTreeMongoRepository` to configure tree fields.
+- Add `validate_move` and `validate_delete` hooks to `BaseTreeMongoRepository`.
+- Add `session` argument to `prepare_object_data`, `prepare_creation_data` and `validate_object_data`, and `query`
+  argument to `validate_object_data` with the query of updated documents.
 
 ### Changed
 
-- Pass mongo credentials to the client as `username`/`password` arguments instead of embedding them in the connection URL.
-- Move default arguments into the `key` argument for `OPAConfig` and `GatewayEndpointConfig` to simplify configuration mapping.
-- Simplify `OPAConfig` handling (see Removed) and introduce `get_opa_query` helper; update `DiscoveryClient` and callers to use the new OPA flow.
-- Refactor configuration and discovery surface: introduce `server_outer_socket`, `server_scheme`, `server_ws_scheme`, `KeycloakSettings`, and more precise `DiscoverySettings`; update `DiscoveryClient` to construct URLs from configurable paths for docs, OpenAPI and health checks.
-- Refactor exception handling and FastAPI utilities: consolidate exceptions, change `DuplicateKeyException` to return HTTP 400, add `SaltBoxBaseException.extra_fields`, and provide custom OpenAPI and HTTP exception handling.
+- Cascade `delete` in `BaseTreeMongoRepository` deletes the whole subtree with a single `delete_many` instead of
+  recursive deletion.
+- `get_descendants_ids` fetches descendants level by level with one query per level.
+- Pass mongo credentials to the client as `username`/`password` arguments instead of embedding them in the connection
+  URL.
+- Move default arguments into the `key` argument for `OPAConfig` and `GatewayEndpointConfig` to simplify configuration
+  mapping.
+- Simplify `OPAConfig` handling (see Removed) and introduce `get_opa_query` helper; update `DiscoveryClient` and callers
+  to use the new OPA flow.
+- Refactor configuration and discovery surface: introduce `server_outer_socket`, `server_scheme`, `server_ws_scheme`,
+  `KeycloakSettings`, and more precise `DiscoverySettings`; update `DiscoveryClient` to construct URLs from configurable
+  paths for docs, OpenAPI and health checks.
+- Refactor exception handling and FastAPI utilities: consolidate exceptions, change `DuplicateKeyException` to return
+  HTTP 400, add `SaltBoxBaseException.extra_fields`, and provide custom OpenAPI and HTTP exception handling.
 - Set a default `redis_url` in `RedisSettings` to `redis://localhost:6379/0` to provide a sensible local default.
 - Refactor `get_current_user` to read headers from the `Request` object and simplify auth header handling.
-- Improve typing and overrides for `MongoBaseService.get_list()` and update sorting logic to use the new `SortOrder` type.
-- Add `mongo_host` to `MongoSettings` and update logger configuration (`LoggerSettings.model_config`) to ignore extra fields.
+- Improve typing and overrides for `MongoBaseService.get_list()` and update sorting logic to use the new `SortOrder`
+  type.
+- Add `mongo_host` to `MongoSettings` and update logger configuration (`LoggerSettings.model_config`) to ignore extra
+  fields.
 - Refactor MongoDB client retrieval, singleton behavior, and session management.
 - Add an option to allow MongoDB `replicaSet` to be unset in configuration.
 - Refactor mongo repository joins.
@@ -68,6 +87,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Pass `session` through `get_parent`, `get_parent_id` and the documents count in `update`.
+- `get_parent_id` returns `None` for a model with empty parent instead of raising a validation error.
 - Raise a `ValueError` on invalid cursor values in `zscan` to prevent silent failures.
 - Fix potential timestamps inconsistency in persistence logic to ensure stable ordering of time-based fields.
 - Improve ObjectId conversion and exception handling in utility functions to avoid masking original errors.

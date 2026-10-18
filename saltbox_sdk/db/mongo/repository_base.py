@@ -227,15 +227,19 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         self,
         data: dict[str, Any],
         projection_model: type[ProjectionModel] | None = None,
+        *,
+        session: MongoAsyncClientSession | None = None,
     ) -> dict[str, Any]:
         return data
 
     async def prepare_creation_data(
         self,
         data: ModelType | dict[str, Any],
+        *,
+        session: MongoAsyncClientSession | None = None,
     ) -> dict[str, Any]:
         try:
-            data = await self.validate_object_data(data)
+            data = await self.validate_object_data(data, session=session)
         except ValueError as e:
             raise ObjectCreateException(str(e)) from e
 
@@ -255,12 +259,30 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         return data_dict
 
     @overload
-    async def validate_object_data(self, data: ModelType) -> ModelType: ...
+    async def validate_object_data(
+        self,
+        data: ModelType,
+        *,
+        query: dict[str, Any] | None = None,
+        session: MongoAsyncClientSession | None = None,
+    ) -> ModelType: ...
 
     @overload
-    async def validate_object_data(self, data: dict[str, Any]) -> dict[str, Any]: ...
+    async def validate_object_data(
+        self,
+        data: dict[str, Any],
+        *,
+        query: dict[str, Any] | None = None,
+        session: MongoAsyncClientSession | None = None,
+    ) -> dict[str, Any]: ...
 
-    async def validate_object_data(self, data: ModelType | dict[str, Any]) -> ModelType | dict[str, Any]:
+    async def validate_object_data(
+        self,
+        data: ModelType | dict[str, Any],
+        *,
+        query: dict[str, Any] | None = None,
+        session: MongoAsyncClientSession | None = None,
+    ) -> ModelType | dict[str, Any]:
         return data
 
     def __validate(self) -> None:
@@ -363,7 +385,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         elif len(result) > 1:
             raise MultipleObjectsFoundException()
 
-        data = await self.prepare_object_data(data=result[0], projection_model=projection_model)
+        data = await self.prepare_object_data(data=result[0], projection_model=projection_model, session=session)
 
         if projection_model is not None:
             return projection_model.model_validate(data)
@@ -480,11 +502,11 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         async for doc in cursor:
             if projection_model:
                 yield projection_model.model_validate(
-                    await self.prepare_object_data(data=doc, projection_model=projection_model)
+                    await self.prepare_object_data(data=doc, projection_model=projection_model, session=session)
                 )
             else:
                 yield self.default_model.model_validate(
-                    await self.prepare_object_data(data=doc, projection_model=self.default_model)
+                    await self.prepare_object_data(data=doc, projection_model=self.default_model, session=session)
                 )
 
     async def count(
@@ -531,7 +553,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         *,
         session: MongoAsyncClientSession | None = None,
     ) -> PyObjectId:
-        prepared_data = await self.prepare_creation_data(data)
+        prepared_data = await self.prepare_creation_data(data, session=session)
 
         try:
             result = await self.collection.insert_one(document=prepared_data, session=session)
@@ -556,7 +578,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
 
         prepared_documents = []
         for item in data:
-            prepared_documents.append(await self.prepare_creation_data(item))
+            prepared_documents.append(await self.prepare_creation_data(item, session=session))
 
         result = await self.collection.with_options(write_concern=WriteConcern(w=0)).insert_many(
             documents=prepared_documents, session=session, ordered=False
@@ -574,11 +596,11 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         operator: MongoUpdateOperator = MongoUpdateOperator.set,
         session: MongoAsyncClientSession | None = None,
     ) -> PyObjectId:
+        prepared_query = await self.__prepare_query__(query)
         try:
-            data = await self.validate_object_data(data)
+            data = await self.validate_object_data(data, query=prepared_query, session=session)
         except ValueError as e:
             raise ObjectUpdateException(str(e)) from e
-        prepared_query = await self.__prepare_query__(query)
 
         if isinstance(data, BaseModel):
             data = data.model_dump(exclude={'id'}, exclude_unset=exclude_unset)
@@ -593,7 +615,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
                 else:
                     after_update_data[field] = now
 
-        document_count_to_update = await self.count(prepared_query)
+        document_count_to_update = await self.count(prepared_query, session=session)
 
         if document_count_to_update == 0 and not upsert:
             raise ObjectNotFoundException(obj_type=self.Meta.collection_name, query=prepared_query)
@@ -638,11 +660,11 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         operator: MongoUpdateOperator = MongoUpdateOperator.set,
         session: MongoAsyncClientSession | None = None,
     ) -> list[PyObjectId]:
+        prepared_query = {'_id': query} if isinstance(query, PyObjectId) else query
         try:
-            data = await self.validate_object_data(data)
+            data = await self.validate_object_data(data, query=prepared_query, session=session)
         except ValueError as e:
             raise ObjectUpdateException(str(e)) from e
-        prepared_query = {'_id': query} if isinstance(query, PyObjectId) else query
 
         if isinstance(data, BaseModel):
             data = data.model_dump(exclude={'id'}, exclude_unset=exclude_unset)

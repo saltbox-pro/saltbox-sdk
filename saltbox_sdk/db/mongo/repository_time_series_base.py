@@ -81,7 +81,7 @@ class TimeSeriesRepository[T: BaseModel](BaseMongoRepository[T]):
         *,
         session: MongoAsyncClientSession | None = None,
     ) -> PyObjectId:
-        prepared_data = await self.prepare_creation_data(data=data)
+        prepared_data = await self.prepare_creation_data(data=data, session=session)
 
         try:
             result = await self.collection.insert_one(document=prepared_data, session=session)
