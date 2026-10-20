@@ -43,6 +43,18 @@ def get_mongo_db(db_name: str = MONGO_SETTINGS.mongo_db) -> MongoAsyncDatabase:
     return _get_mongo_client()[db_name]
 
 
+async def reset_mongo_client() -> None:
+    instance = _MongoClientSingleton.instance
+
+    if instance is None:
+        return
+
+    if instance.mongo_client is not None:
+        await instance.mongo_client.close()
+
+    _MongoClientSingleton.instance = None
+
+
 # TODO (a.baikov): Should we use generator
 def get_mongo() -> Generator[MongoAsyncDatabase, None, None]:
     try:
