@@ -1,4 +1,5 @@
-from collections.abc import AsyncGenerator, Generator
+import threading
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import ClassVar
 
@@ -14,17 +15,20 @@ from saltbox_sdk.config.mongo_config import MONGO_SETTINGS
 
 class _MongoClientSingleton:
     instance: ClassVar['_MongoClientSingleton | None'] = None
+    lock: ClassVar[threading.Lock] = threading.Lock()
     mongo_client: AsyncMongoClient | None
 
     def __new__(cls) -> '_MongoClientSingleton':
-        if cls.instance is None:
-            cls.instance = super().__new__(cls)
-            cls.instance.mongo_client = AsyncMongoClient(
-                MONGO_SETTINGS.mongo_url,
-                username=MONGO_SETTINGS.mongo_user or None,
-                password=MONGO_SETTINGS.mongo_password,
-            )
-            logger.debug('Mongo client initialized')
+        with cls.lock:
+            if cls.instance is None:
+                instance = super().__new__(cls)
+                instance.mongo_client = AsyncMongoClient(
+                    MONGO_SETTINGS.mongo_url,
+                    username=MONGO_SETTINGS.mongo_user or None,
+                    password=MONGO_SETTINGS.mongo_password,
+                )
+                cls.instance = instance
+                logger.debug('Mongo client initialized')
 
         return cls.instance
 
@@ -55,13 +59,8 @@ async def reset_mongo_client() -> None:
     _MongoClientSingleton.instance = None
 
 
-# TODO (a.baikov): Should we use generator
-def get_mongo() -> Generator[MongoAsyncDatabase, None, None]:
-    try:
-        db = get_mongo_db()
-        yield db
-    finally:
-        pass
+async def get_mongo() -> MongoAsyncDatabase:
+    return get_mongo_db()
 
 
 def get_sync_mongo_db(db_name: str = MONGO_SETTINGS.mongo_db) -> MongoSyncDatabase:

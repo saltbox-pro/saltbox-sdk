@@ -51,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `get_mongo` is an async dependency now, so FastAPI resolves it in the event loop instead of the threadpool.
 - Cascade `delete` in `BaseTreeMongoRepository` deletes the whole subtree with a single `delete_many` instead of
   recursive deletion.
 - `get_descendants_ids` fetches descendants level by level with one query per level.
@@ -87,6 +88,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Race in Mongo client singleton initialization: parallel first requests could get an instance without
+  `mongo_client` and fail with `AttributeError`.
 - Pass `session` through `get_parent`, `get_parent_id` and the documents count in `update`.
 - `get_parent_id` returns `None` for a model with empty parent instead of raising a validation error.
 - Raise a `ValueError` on invalid cursor values in `zscan` to prevent silent failures.
