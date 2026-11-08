@@ -1,3 +1,4 @@
+import re
 from collections.abc import AsyncIterator
 from enum import StrEnum
 from inspect import isclass
@@ -61,6 +62,30 @@ class MongoUpdateOperator(StrEnum):
     push = '$push'  # Can be used with `$each`, `$position`, `$slice` and `$sort` modificators
 
 
+class MultilanguageFieldRepositoryMixin:
+    DEFAULT_LANGUAGES: ClassVar[list[str]] = ['ru', 'en']
+
+    def get_languages_for_field(self, field_name: str) -> list[str]:
+        languages_for_field: dict[str, list[str]] = getattr(self.Meta, 'languages_for_field', {})
+
+        return languages_for_field.get(field_name, self.DEFAULT_LANGUAGES)
+
+    async def multilanguage_field_query_override(
+        self, field_name: str, field_match: re.Match, field_value: Any, full_raw_query: dict
+    ) -> dict[str, Any]:
+        languages = self.get_languages_for_field(field_name)
+
+        return {
+            '$or': [
+                {field_name: field_value},
+                *[{f'{field_name}.{language}': field_value} for language in languages],
+            ]
+        }
+
+    class Meta:
+        languages_for_field: ClassVar[dict[str, list[str]]] = {}
+
+
 class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
     class Meta:
         collection_name: ClassVar[str]
@@ -117,15 +142,23 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
 
         query_overrides = self.__query_overrides__
 
-        async def recursive_override(data: dict[str, Any]) -> dict[str, Any]:
+        async def recursive_override(data: dict[str, Any]) -> dict[str, Any]:  # noqa: C901
             _query: dict[str, Any] = {}
+
+            def merge_condition(condition: dict[str, Any]) -> None:
+                for condition_key, condition_value in condition.items():
+                    if condition_key in _query:
+                        _query.setdefault('$and', []).append({condition_key: _query.pop(condition_key)})
+                        _query['$and'].append({condition_key: condition_value})
+                    else:
+                        _query[condition_key] = condition_value
 
             for data_key, data_value in data.items():
                 is_override = False
                 for field_re, field_callback in query_overrides.items():
                     field_match = field_re.match(data_key)
                     if field_match:
-                        _query.update(
+                        merge_condition(
                             await field_callback(
                                 field_name=data_key,
                                 field_match=field_match,
@@ -149,7 +182,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
                     _query[data_key] = data_value
                 else:
                     try:
-                        _query['$or'] = [{data_key: data_value}, {data_key: PyObjectId(data_value)}]
+                        merge_condition({'$or': [{data_key: data_value}, {data_key: PyObjectId(data_value)}]})
                     except Exception:
                         _query[data_key] = data_value
             return _query

@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-
+- Add `MultilanguageFieldRepositoryMixin` to match multilanguage fields (plain string or per-language subfields) through `query_overrides`.
 - Add `title`, `description`, `icon` and `is_single_item` to `MinionExtraDataCategory`.
 - Add `mongo_uri` to `MongoSettings` to override the built connection URL.
 - Allow comma-separated list of hosts (with optional `:port`) in `mongo_host`.
@@ -87,7 +87,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add migration stages for mongo collections.
 
 ### Fixed
-
+- Fix `__prepare_query__` silently dropping conditions on key collisions when merging `query_overrides` results and ObjectId-cast field conditions: colliding conditions are now combined with `$and`.
 - Race in Mongo client singleton initialization: parallel first requests could get an instance without
   `mongo_client` and fail with `AttributeError`.
 - Pass `session` through `get_parent`, `get_parent_id` and the documents count in `update`.
