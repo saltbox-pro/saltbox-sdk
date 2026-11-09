@@ -87,6 +87,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add migration stages for mongo collections.
 
 ### Fixed
+- Fix negative multilanguage filters: `$ne`, `$nin` and `$not` now exclude documents when any plain or per-language value matches.
 - Fix `__prepare_query__` silently dropping conditions on key collisions when merging `query_overrides` results and ObjectId-cast field conditions: colliding conditions are now combined with `$and`.
 - Race in Mongo client singleton initialization: parallel first requests could get an instance without
   `mongo_client` and fail with `AttributeError`.

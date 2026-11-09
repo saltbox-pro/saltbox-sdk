@@ -64,6 +64,7 @@ class MongoUpdateOperator(StrEnum):
 
 class MultilanguageFieldRepositoryMixin:
     DEFAULT_LANGUAGES: ClassVar[list[str]] = ['ru', 'en']
+    NEGATIVE_OPERATORS: ClassVar[frozenset[str]] = frozenset({'$ne', '$nin', '$not'})
 
     def get_languages_for_field(self, field_name: str) -> list[str]:
         languages_for_field: dict[str, list[str]] = getattr(self.Meta, 'languages_for_field', {})
@@ -74,9 +75,11 @@ class MultilanguageFieldRepositoryMixin:
         self, field_name: str, field_match: re.Match, field_value: Any, full_raw_query: dict
     ) -> dict[str, Any]:
         languages = self.get_languages_for_field(field_name)
+        is_negative = isinstance(field_value, dict) and not self.NEGATIVE_OPERATORS.isdisjoint(field_value)
+        group_operator = '$and' if is_negative else '$or'
 
         return {
-            '$or': [
+            group_operator: [
                 {field_name: field_value},
                 *[{f'{field_name}.{language}': field_value} for language in languages],
             ]
@@ -148,7 +151,8 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
             def merge_condition(condition: dict[str, Any]) -> None:
                 for condition_key, condition_value in condition.items():
                     if condition_key in _query:
-                        _query.setdefault('$and', []).append({condition_key: _query.pop(condition_key)})
+                        previous_condition_value = _query.pop(condition_key)
+                        _query.setdefault('$and', []).append({condition_key: previous_condition_value})
                         _query['$and'].append({condition_key: condition_value})
                     else:
                         _query[condition_key] = condition_value
