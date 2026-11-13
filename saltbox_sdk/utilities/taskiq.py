@@ -1,7 +1,11 @@
+import hashlib
+import inspect
+import json
 import random
 from ast import literal_eval
-from collections.abc import Iterable
-from typing import Any
+from collections.abc import Awaitable, Callable, Iterable
+from typing import Any, cast
+from uuid import uuid4
 
 from redis.asyncio import Redis
 from taskiq import ScheduleSource, TaskiqMessage, TaskiqMiddleware, TaskiqResult
@@ -9,14 +13,21 @@ from taskiq.middlewares import SmartRetryMiddleware as OriginalSmartRetryMiddlew
 
 from saltbox_sdk.config.logger_config import logger
 from saltbox_sdk.db.redis.config import get_redis_now
+from saltbox_sdk.utilities.lua_script import LuaScript
+from saltbox_sdk.utilities.taskiq_lock import UniqueTaskLock
 
 
 class TaskAlreadyRunningException(Exception): ...
 
 
 class UniqueIdMiddleware(TaskiqMiddleware):
-    UNIQUE_REDIS_HASH_KEY = 'taskqi_unique_tasks'
+    UNIQUE_REDIS_KEY_PREFIX = 'taskiq:unique'
     DEFAULT_UNIQUE_LOCK_TIMEOUT = 60
+    LOCK_KEY_LABEL = '_unique_lock_key'
+    OWNER_LABEL = '_unique_lock_owner'
+    EXECUTION_OWNER_LABEL = '_unique_execution_owner'
+    DEFERRED_LABEL = '_unique_deferred'
+    TRANSFER_SCRIPT = LuaScript('utilities/lua/transfer_unique_task.lua')
 
     def __init__(self, rdb: Redis | None = None) -> None:
         if rdb is None:
@@ -27,53 +38,113 @@ class UniqueIdMiddleware(TaskiqMiddleware):
         super().__init__()
 
     def get_task_lock_key(
-        self, task_name: str, task_unique_kwargs_names: list['str'], task_kwargs: dict[str, Any]
+        self, task_name: str, task_unique_kwargs_names: list[str], task_kwargs: dict[str, Any]
     ) -> str:
-        lock_key = f'{task_name}'
+        missing = set(task_unique_kwargs_names) - task_kwargs.keys()
+        if missing:
+            msg = f'Unique task arguments are missing: {sorted(missing)}'
+            raise ValueError(msg)
+        values = {name: task_kwargs[name] for name in task_unique_kwargs_names}
+        payload = json.dumps(values, sort_keys=True, separators=(',', ':'), allow_nan=False)
+        digest = hashlib.sha256(payload.encode()).hexdigest()
+        return f'{self.UNIQUE_REDIS_KEY_PREFIX}:{task_name}:{digest}'
 
-        unique_kwargs_values = [str(task_kwargs.get(kwargs_name)) for kwargs_name in task_unique_kwargs_names]
-
-        if unique_kwargs_values:
-            lock_key = lock_key + '=' + '__'.join(unique_kwargs_values)
-
-        return lock_key
+    def get_task_arguments(self, message: TaskiqMessage) -> dict[str, Any]:
+        task = self.broker.find_task(message.task_name) if self.broker is not None else None
+        if task is None:
+            return message.kwargs
+        bound = inspect.signature(task.original_func).bind_partial(*message.args, **message.kwargs)
+        bound.apply_defaults()
+        return dict(bound.arguments)
 
     async def pre_send(self, message: TaskiqMessage) -> TaskiqMessage:
-        task_unique_kwargs_names = literal_eval(message.labels.get('unique_kwargs', '[]'))
+        task_unique_kwargs_names = message.labels.get('unique_kwargs', '[]')
+        if isinstance(task_unique_kwargs_names, str):
+            task_unique_kwargs_names = literal_eval(task_unique_kwargs_names)
+        if not isinstance(task_unique_kwargs_names, list) or not all(
+            isinstance(name, str) for name in task_unique_kwargs_names
+        ):
+            msg = 'unique_kwargs must be a list of argument names'
+            raise ValueError(msg)
         task_unique_lock_timeout = message.labels.get('unique_lock_timeout')
 
-        if task_unique_kwargs_names or task_unique_lock_timeout:
+        if task_unique_kwargs_names or task_unique_lock_timeout is not None:
+            timeout = int(
+                task_unique_lock_timeout if task_unique_lock_timeout is not None else self.DEFAULT_UNIQUE_LOCK_TIMEOUT
+            )
+            if timeout <= 0:
+                msg = 'unique_lock_timeout must be positive'
+                raise ValueError(msg)
+            execution_timeout = message.labels.get('unique_execution_lock_timeout')
+            if execution_timeout is not None and int(execution_timeout) <= 0:
+                msg = 'unique_execution_lock_timeout must be positive'
+                raise ValueError(msg)
             task_unique_lock_key = self.get_task_lock_key(
                 task_name=message.task_name,
                 task_unique_kwargs_names=task_unique_kwargs_names,
-                task_kwargs=message.kwargs,
+                task_kwargs=self.get_task_arguments(message) if task_unique_kwargs_names else {},
             )
-
-            if await self.rdb.hexists(self.UNIQUE_REDIS_HASH_KEY, task_unique_lock_key):
+            token = uuid4().hex
+            acquired = False
+            previous_token = message.labels.get(self.OWNER_LABEL)
+            execution_retry = (
+                previous_token
+                and message.labels.get(self.LOCK_KEY_LABEL) == task_unique_lock_key
+                and message.labels.get(self.EXECUTION_OWNER_LABEL)
+                and int(message.labels.get('_retries', 0)) > 0
+            )
+            if previous_token and message.labels.get(self.LOCK_KEY_LABEL) == task_unique_lock_key:
+                evaluate = cast(Callable[..., Awaitable[int]], self.rdb.eval)
+                acquired = bool(
+                    await evaluate(
+                        self.TRANSFER_SCRIPT.content, 1, task_unique_lock_key, previous_token, token, timeout
+                    )
+                )
+            if not acquired:
+                acquired = bool(await self.rdb.set(task_unique_lock_key, token, nx=True, ex=timeout))
+            if not acquired and not execution_retry:
                 msg = f'Task "{task_unique_lock_key}" is already running'
                 raise TaskAlreadyRunningException(msg)
-
-            async with self.rdb.pipeline() as pipe:
-                pipe.hset(self.UNIQUE_REDIS_HASH_KEY, task_unique_lock_key, message.task_id)
-                pipe.expire(
-                    name=f'{self.UNIQUE_REDIS_HASH_KEY}:{task_unique_lock_key}',
-                    time=task_unique_lock_timeout or self.DEFAULT_UNIQUE_LOCK_TIMEOUT,
-                )
-                await pipe.execute()
+            message.labels[self.LOCK_KEY_LABEL] = task_unique_lock_key
+            message.labels[self.OWNER_LABEL] = token
+            message.labels.pop(self.EXECUTION_OWNER_LABEL, None)
+            message.labels.pop(self.DEFERRED_LABEL, None)
         return message
 
-    async def post_execute(self, message: TaskiqMessage, result: TaskiqResult[Any]) -> None:
-        task_unique_kwargs_names = literal_eval(message.labels.get('unique_kwargs', '[]'))
-        task_unique_lock_timeout = message.labels.get('unique_lock_timeout')
-
-        if task_unique_kwargs_names or task_unique_lock_timeout:
-            task_unique_lock_key = self.get_task_lock_key(
-                task_name=message.task_name,
-                task_unique_kwargs_names=task_unique_kwargs_names,
-                task_kwargs=message.kwargs,
+    def get_lock(self, message: TaskiqMessage) -> UniqueTaskLock | None:
+        key = message.labels.get(self.LOCK_KEY_LABEL)
+        token = message.labels.get(self.OWNER_LABEL)
+        if key and token:
+            return UniqueTaskLock(
+                rdb=self.rdb,
+                enqueue_key=key,
+                enqueue_owner=token,
+                execution_owner=message.labels.get(self.EXECUTION_OWNER_LABEL, ''),
+                lock_timeout=int(message.labels.get('unique_lock_timeout', self.DEFAULT_UNIQUE_LOCK_TIMEOUT)),
+                execution_lock_timeout=(
+                    int(message.labels['unique_execution_lock_timeout'])
+                    if message.labels.get('unique_execution_lock_timeout') is not None else None
+                ),
             )
+        return None
 
-            await self.rdb.hdel(self.UNIQUE_REDIS_HASH_KEY, task_unique_lock_key)
+    async def acquire_execution(self, message: TaskiqMessage) -> bool:
+        message.labels[self.EXECUTION_OWNER_LABEL] = uuid4().hex
+        lock = self.get_lock(message)
+        if lock is None:
+            message.labels.pop(self.EXECUTION_OWNER_LABEL, None)
+            return True
+        acquired = await lock.acquire_execution()
+        if not acquired:
+            message.labels.pop(self.EXECUTION_OWNER_LABEL, None)
+        return acquired
+
+    async def post_execute(self, message: TaskiqMessage, result: TaskiqResult[Any]) -> None:
+        if message.labels.get(self.DEFERRED_LABEL):
+            return
+        lock = self.get_lock(message)
+        if lock is not None:
+            await lock.release_all_locks()
 
     async def on_error(self, message: TaskiqMessage, result: TaskiqResult[Any], exception: BaseException) -> None:
         if isinstance(exception, TaskAlreadyRunningException):

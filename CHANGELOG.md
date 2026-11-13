@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Add separate enqueue and execution locks for unique Taskiq tasks, lazy Lua resources, and a RabbitMQ broker
+  with confirmed delayed publication to the original queue.
 - Add `MultilanguageFieldRepositoryMixin` to match multilanguage fields (plain string or per-language subfields) through `query_overrides`.
 - Add `title`, `description`, `icon` and `is_single_item` to `MinionExtraDataCategory`.
 - Add `mongo_uri` to `MongoSettings` to override the built connection URL.
@@ -87,6 +89,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add migration stages for mongo collections.
 
 ### Fixed
+- Make unique task reservations atomic with an effective TTL, collision-resistant argument keys and owner-checked release.
+- Include SDK subpackages and Lua resources in built distributions.
 - Fix negative multilanguage filters: `$ne`, `$nin` and `$not` now exclude documents when any plain or per-language value matches.
 - Fix `__prepare_query__` silently dropping conditions on key collisions when merging `query_overrides` results and ObjectId-cast field conditions: colliding conditions are now combined with `$and`.
 - Race in Mongo client singleton initialization: parallel first requests could get an instance without
