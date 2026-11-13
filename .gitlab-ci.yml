@@ -18,7 +18,7 @@ include:
   before_script:
     - mkdir --parents "$APK_CACHE_DIR"
     - apk add --cache-dir "$APK_CACHE_DIR" git
-    - pip3 install -e .[dev,rest,mongo,redis,event-bus,taskiq]
+    - pip3 install -e .[dev,rest,mongo,redis,event-bus,taskiq,taskiq-rabbitmq]
   cache:
     paths:
       - '$PIP_CACHE_DIR'
