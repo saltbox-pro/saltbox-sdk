@@ -176,7 +176,7 @@ class AggregationsStore:
         pipeline: list[dict] = []
 
         for field_key in self.__aggregations.keys():
-            if any(field_key == field_name or f'{field_key}.' in field_name for field_name in fields_names):
+            if any(field_key == field_name or field_name.startswith(f'{field_key}.') for field_name in fields_names):
                 self.__get_pipeline(field_name=field_key, pipeline=pipeline, stages_to_exclude=stages_to_exclude)
 
         return pipeline

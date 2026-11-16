@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Add `SaltboxTaskiqScheduler` to skip duplicate unique task submissions without error tracebacks.
+- Add owner-checked `UniqueTaskLock.renew_execution_lock(ttl)` to renew execution and still-owned enqueue locks.
 - Add separate enqueue and execution locks for unique Taskiq tasks, lazy Lua resources, and a RabbitMQ broker
   with confirmed delayed publication to the original queue.
 - Add `MultilanguageFieldRepositoryMixin` to match multilanguage fields (plain string or per-language subfields) through `query_overrides`.
@@ -89,6 +91,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add migration stages for mongo collections.
 
 ### Fixed
+- Match aggregation fields by exact path or path prefix, preventing unrelated nested names from triggering lookups.
 - Make unique task reservations atomic with an effective TTL, collision-resistant argument keys and owner-checked release.
 - Include SDK subpackages and Lua resources in built distributions.
 - Fix negative multilanguage filters: `$ne`, `$nin` and `$not` now exclude documents when any plain or per-language value matches.

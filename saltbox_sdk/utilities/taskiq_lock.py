@@ -9,6 +9,7 @@ from saltbox_sdk.utilities.lua_script import LuaScript
 _RELEASE_SCRIPT = LuaScript('utilities/lua/release_unique_task.lua')
 _RELEASE_ALL_SCRIPT = LuaScript('utilities/lua/release_unique_task_locks.lua')
 _ACQUIRE_SCRIPT = LuaScript('utilities/lua/acquire_unique_task_execution.lua')
+_RENEW_SCRIPT = LuaScript('utilities/lua/renew_unique_task_execution.lua')
 
 
 @dataclass(frozen=True)
@@ -47,6 +48,27 @@ class UniqueTaskLock:
                 self.execution_owner,
                 self.lock_timeout * 1000,
                 (self.execution_lock_timeout or 0) * 1000,
+            )
+        )
+
+    async def renew_execution_lock(self, ttl: int) -> bool:
+        """Renew execution and any still-owned enqueue lock; never reacquire either."""
+        if ttl <= 0:
+            msg = 'Unique task lock ttl must be positive'
+            raise ValueError(msg)
+        if not self.execution_owner:
+            msg = 'An execution owner is required to renew the execution lock'
+            raise ValueError(msg)
+        evaluate = cast(Callable[..., Awaitable[int]], self.rdb.eval)
+        return bool(
+            await evaluate(
+                _RENEW_SCRIPT.content,
+                2,
+                self.enqueue_key,
+                self.execution_key,
+                self.enqueue_owner,
+                self.execution_owner,
+                ttl * 1000,
             )
         )
 

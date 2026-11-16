@@ -8,8 +8,9 @@ from typing import Any, cast
 from uuid import uuid4
 
 from redis.asyncio import Redis
-from taskiq import ScheduleSource, TaskiqMessage, TaskiqMiddleware, TaskiqResult
+from taskiq import ScheduleSource, TaskiqMessage, TaskiqMiddleware, TaskiqResult, TaskiqScheduler
 from taskiq.middlewares import SmartRetryMiddleware as OriginalSmartRetryMiddleware
+from taskiq.scheduler.scheduled_task import ScheduledTask
 
 from saltbox_sdk.config.logger_config import logger
 from saltbox_sdk.db.redis.config import get_redis_now
@@ -198,3 +199,11 @@ class SmartRetryMiddleware(OriginalSmartRetryMiddleware):
             delay += random.random()  # noqa: S311
 
         return delay
+
+
+class SaltboxTaskiqScheduler(TaskiqScheduler):
+    async def on_ready(self, source: ScheduleSource, task: ScheduledTask) -> None:
+        try:
+            await super().on_ready(source, task)
+        except TaskAlreadyRunningException:
+            logger.debug('Scheduled task %s is already queued or running; skipping this attempt', task.task_name)
