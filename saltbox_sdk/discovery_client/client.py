@@ -79,6 +79,7 @@ class DiscoveryClient:
                             action=details.get('x-opa-action', ''),
                         ),
                         cache_ttl=details.get('x-cache-ttl', 0),
+                        request_body_stream=details.get('x-request-body-stream', False),
                     )
                 )
         return endpoints

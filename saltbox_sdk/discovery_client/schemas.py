@@ -48,6 +48,7 @@ class OPAConfig(BaseModel):
 
 class GatewayEndpointConfig(OPAConfig):
     cache_ttl: int | None = Field(serialization_alias='x-cache-ttl', default=0)
+    request_body_stream: bool = Field(serialization_alias='x-request-body-stream', default=False)
 
 
 class ServiceEndpoint(BaseModel):
@@ -57,6 +58,7 @@ class ServiceEndpoint(BaseModel):
     description: str = ''
     opa_config: OPAConfig
     cache_ttl: int = 0
+    request_body_stream: bool = False
 
 
 class ServiceStatus(StrEnum):

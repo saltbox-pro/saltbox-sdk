@@ -167,7 +167,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
                                 field_name=data_key,
                                 field_match=field_match,
                                 field_value=data_value,
-                                full_raw_query=query,  # type: ignore
+                                full_raw_query=query,  # type: ignore[arg-type]
                             )
                         )
                         is_override = True
@@ -821,22 +821,31 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         existing = await self.collection.index_information()
         existing_names = set(existing.keys())
 
+        for idx_name in expected:
+            idx_opts = dict(options.get(idx_name, {}))
+            # Backward compatibility: legacy repositories encode uniqueness in the name.
+            if 'unique' in idx_name.lower():
+                idx_opts['unique'] = True
+            options[idx_name] = idx_opts
+
         for idx_name in existing_names - {'_id_'}:
             if idx_name not in expected:
-                try:
-                    await self.collection.drop_index(idx_name)
-                    logger.debug(f'Dropped unexpected index `{idx_name}`')
-                except OperationFailure as e:
-                    logger.warning(f'Cannot drop `{idx_name}`: {e}')
+                await self.collection.drop_index(idx_name)
+                logger.debug(f'Dropped unexpected index `{idx_name}`')
 
         for idx_name, keys in expected.items():
-            if idx_name not in existing_names:
-                idx_opts = options.get(idx_name, {})
-                # Backward compatibility
-                if 'unique' in idx_name.lower():
-                    idx_opts['unique'] = True
-                await self.collection.create_index(keys, name=idx_name, **idx_opts)
-                logger.debug(f'Created index `{idx_name}`')
+            try:
+                # Matching indexes are left intact; MongoDB checks the normalized definition.
+                await self.collection.create_index(keys, name=idx_name, **options[idx_name])
+            except OperationFailure as error:
+                if idx_name not in existing_names or idx_name == '_id_' or error.code not in (85, 86):
+                    raise
+                await self.collection.drop_index(idx_name)
+                await self.collection.create_index(keys, name=idx_name, **options[idx_name])
+                logger.info(f'Rebuilt changed index `{idx_name}`')
+            else:
+                if idx_name not in existing_names:
+                    logger.debug(f'Created index `{idx_name}`')
 
     async def create_collection(self) -> None:
         try:
