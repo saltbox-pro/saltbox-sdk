@@ -91,6 +91,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add migration stages for mongo collections.
 
 ### Fixed
+- Apply multilanguage null equality and inequality filters to the original field without expanding translations.
 - Match aggregation fields by exact path or path prefix, preventing unrelated nested names from triggering lookups.
 - Make unique task reservations atomic with an effective TTL, collision-resistant argument keys and owner-checked release.
 - Include SDK subpackages and Lua resources in built distributions.

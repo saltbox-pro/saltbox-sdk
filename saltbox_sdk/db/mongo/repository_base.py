@@ -74,6 +74,9 @@ class MultilanguageFieldRepositoryMixin:
     async def multilanguage_field_query_override(
         self, field_name: str, field_match: re.Match, field_value: Any, full_raw_query: dict
     ) -> dict[str, Any]:
+        if field_value is None or field_value == {'$eq': None} or field_value == {'$ne': None}:
+            return {field_name: field_value}
+
         languages = self.get_languages_for_field(field_name)
         is_negative = isinstance(field_value, dict) and not self.NEGATIVE_OPERATORS.isdisjoint(field_value)
         group_operator = '$and' if is_negative else '$or'
