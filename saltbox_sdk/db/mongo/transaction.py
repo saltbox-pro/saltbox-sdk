@@ -1,4 +1,6 @@
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 
 from pymongo import ReadPreference, WriteConcern
 from pymongo.asynchronous.client_session import AsyncClientSession
@@ -36,6 +38,41 @@ class MongoTransaction:
             raise InvalidOperation(msg)
 
 
+_active_transactions: ContextVar[tuple[MongoTransaction, ...]] = ContextVar('mongo_transactions', default=())
+
+
+@contextmanager
+def _track_transaction(session: AsyncClientSession) -> Iterator[MongoTransaction]:
+    tx = MongoTransaction(session)
+    token = _active_transactions.set((*_active_transactions.get(), tx))
+    try:
+        yield tx
+    finally:
+        tx._active = False
+        _active_transactions.reset(token)
+
+
+def _get_managed_transaction(session: AsyncClientSession | None) -> MongoTransaction | None:
+    if session is None or not session.in_transaction:
+        return None
+
+    for tx in reversed(_active_transactions.get()):
+        if tx._session is session:
+            tx._check_active()
+            return tx
+
+    msg = 'Notifications in a MongoDB transaction require an SDK-managed transaction or notify=False.'
+    raise InvalidOperation(msg)
+
+
+async def _run_commit_hooks(hooks: list[CommitHook]) -> None:
+    for hook in hooks:
+        try:
+            await hook()
+        except Exception:
+            logger.exception('MongoDB post-commit hook failed')
+
+
 async def transact[T](work: Callable[[MongoTransaction], Awaitable[T]]) -> T:
     """Run MongoDB work in a transaction and return the result of the committed attempt.
 
@@ -53,13 +90,10 @@ async def transact[T](work: Callable[[MongoTransaction], Awaitable[T]]) -> T:
     """
 
     async def attempt(session: AsyncClientSession) -> tuple[T, list[CommitHook]]:
-        tx = MongoTransaction(session)
-        try:
+        with _track_transaction(session) as tx:
             result = await work(tx)
             tx._check_active()
             return result, tx._hooks
-        finally:
-            tx._active = False
 
     async with _get_mongo_client().start_session() as session:
         result, hooks = await session.with_transaction(
@@ -69,10 +103,5 @@ async def transact[T](work: Callable[[MongoTransaction], Awaitable[T]]) -> T:
             read_preference=ReadPreference.PRIMARY,
         )
 
-    for hook in hooks:
-        try:
-            await hook()
-        except Exception:
-            logger.exception('MongoDB post-commit hook failed')
-
+    await _run_commit_hooks(hooks)
     return result

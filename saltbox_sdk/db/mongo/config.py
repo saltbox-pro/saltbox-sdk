@@ -77,6 +77,8 @@ def get_sync_mongo_db(db_name: str = MONGO_SETTINGS.mongo_db) -> MongoSyncDataba
 async def get_mongo_session_with_transaction(
     session: AsyncClientSession | None = None,
 ) -> AsyncGenerator[AsyncClientSession, None]:
+    from saltbox_sdk.db.mongo.transaction import _run_commit_hooks, _track_transaction
+
     if session is not None and session.in_transaction:
         yield session
         return
@@ -89,4 +91,9 @@ async def get_mongo_session_with_transaction(
             write_concern=WriteConcern('majority'),
             read_preference=ReadPreference.PRIMARY,
         ):
-            yield session_with_transaction
+            with _track_transaction(session_with_transaction) as tx:
+                yield session_with_transaction
+                if tx._hooks:
+                    tx._check_active()
+
+    await _run_commit_hooks(tx._hooks)

@@ -1,6 +1,7 @@
 import json
 from abc import abstractmethod
 from collections.abc import Callable
+from functools import partial
 from typing import Any, overload, override
 
 from pydantic import BaseModel
@@ -11,6 +12,7 @@ from redis.asyncio import Redis
 from saltbox_sdk.config.logger_config import logger
 from saltbox_sdk.db.mongo.repository_base import BaseMongoRepository, MongoUpdateOperator
 from saltbox_sdk.db.mongo.schemas_base import EmptyModel, PyObjectId
+from saltbox_sdk.db.mongo.transaction import _get_managed_transaction
 from saltbox_sdk.exceptions import ObjectNotFoundException
 from saltbox_sdk.serivces.mongo_base_service import MongoBaseService
 from saltbox_sdk.utilities.taskiq import TaskAlreadyRunningException
@@ -53,10 +55,11 @@ class MongoBaseWithNotifyService[
         session: MongoAsyncClientSession | None = None,
         notify: bool = True,
     ) -> PyObjectId:
+        self._check_notify_session(session=session, notify=notify)
         obj_id = await super().create(data=data, session=session)
 
-        if isinstance(notify, bool) and notify:
-            await self._notify(obj_id=obj_id, action='create')
+        if notify is True:
+            await self._notify(obj_id=obj_id, action='create', session=session)
 
         return obj_id
 
@@ -68,11 +71,12 @@ class MongoBaseWithNotifyService[
         session: MongoAsyncClientSession | None = None,
         notify: bool = True,
     ) -> list[PyObjectId]:
+        self._check_notify_session(session=session, notify=notify)
         obj_ids = await super().bulk_create(data=data, session=session)
 
-        if isinstance(notify, bool) and notify:
+        if notify is True:
             for obj_id in obj_ids:
-                await self._notify(obj_id=obj_id, action='create')
+                await self._notify(obj_id=obj_id, action='create', session=session)
 
         return obj_ids
 
@@ -86,12 +90,13 @@ class MongoBaseWithNotifyService[
         session: MongoAsyncClientSession | None = None,
         notify: bool = True,
     ) -> PyObjectId:
+        self._check_notify_session(session=session, notify=notify)
         obj_id = await super().update(
             query=query, data=data, exclude_unset=exclude_unset, operator=operator, session=session
         )
 
-        if isinstance(notify, bool) and notify:
-            await self._notify(obj_id=obj_id, action='update')
+        if notify is True:
+            await self._notify(obj_id=obj_id, action='update', session=session)
 
         return obj_id
 
@@ -105,13 +110,14 @@ class MongoBaseWithNotifyService[
         session: MongoAsyncClientSession | None = None,
         notify: bool = True,
     ) -> list[PyObjectId]:
+        self._check_notify_session(session=session, notify=notify)
         obj_ids = await super().bulk_update(
             query=query, data=data, exclude_unset=exclude_unset, operator=operator, session=session
         )
 
-        if isinstance(notify, bool) and notify:
+        if notify is True:
             for obj_id in obj_ids:
-                await self._notify(obj_id=obj_id, action='update')
+                await self._notify(obj_id=obj_id, action='update', session=session)
 
         return obj_ids
 
@@ -140,11 +146,15 @@ class MongoBaseWithNotifyService[
         session: MongoAsyncClientSession | None = None,
         notify: bool = True,
     ) -> int:
-        obj = await self.get(query=query, session=session, projection_model=EmptyModel)
-        deleted_count = await super().delete(query=obj.id, session=session)
+        self._check_notify_session(session=session, notify=notify)
+        if isinstance(query, PyObjectId):
+            obj_id = query
+        else:
+            obj_id = (await self.get(query=query, session=session, projection_model=EmptyModel)).id
+        deleted_count = await super().delete(query=obj_id, session=session)
 
-        if isinstance(notify, bool) and notify:
-            await self._notify(obj_id=obj.id, action='delete')
+        if notify is True and deleted_count:
+            await self._notify(obj_id=obj_id, action='delete', session=session)
 
         return deleted_count
 
@@ -173,25 +183,45 @@ class MongoBaseWithNotifyService[
         session: MongoAsyncClientSession | None = None,
         notify: bool = True,
     ) -> int:
-        objs = await self.get_list(query=query, session=session, projection_model=EmptyModel)
-        deleted_count = await super().delete(query={'_id': {'$in': [obj.id for obj in objs]}}, session=session)
+        if isinstance(query, PyObjectId):
+            query = {'_id': query}
 
-        for obj in objs:
-            if isinstance(notify, bool) and notify:
-                await self._notify(obj_id=obj.id, action='delete')
+        self._check_notify_session(session=session, notify=notify)
+        objs = await self.get_list(query=query, session=session, projection_model=EmptyModel)
+        if not objs:
+            return 0
+
+        deleted_count = await super().delete_many(query={'_id': {'$in': [obj.id for obj in objs]}}, session=session)
+        if notify is True and deleted_count:
+            for obj in objs:
+                await self._notify(obj_id=obj.id, action='delete', session=session)
 
         return deleted_count
 
     def _get_notify_channel(self, obj: BaseModel, action: str) -> str | None:
         return None
 
-    async def _notify(self, obj_id: PyObjectId, action: str) -> None:
+    @staticmethod
+    def _check_notify_session(session: MongoAsyncClientSession | None, notify: bool) -> None:
+        if notify is True:
+            _get_managed_transaction(session)
+
+    async def _notify(self, obj_id: PyObjectId, action: str, *, session: MongoAsyncClientSession | None = None) -> None:
+        tx = _get_managed_transaction(session)
+        if tx is not None:
+            tx.on_commit(partial(self._notify, obj_id=obj_id, action=action))
+            return
+
         try:
             await self.notify_taskiq_task.kiq(service_name=self.service_name, document_id=str(obj_id), action=action)  # type: ignore
         except TaskAlreadyRunningException as e:
             logger.debug(str(e))
 
     async def run_notify(self, obj_id: PyObjectId, action: str) -> None:
+        if action == 'delete':
+            await self.run_delete_notify(obj_id=obj_id)
+            return
+
         try:
             obj = await self.get(query=obj_id, projection_model=self.notify_schema)
             channel = self._get_notify_channel(obj=obj, action=action)
@@ -202,6 +232,14 @@ class MongoBaseWithNotifyService[
             logger.error(e)
         except ObjectNotFoundException:
             logger.debug(f'Object "{self.repo.Meta.collection_name}" for notifying not found by query: {obj_id}')
+
+    async def run_delete_notify(self, obj_id: PyObjectId) -> None:
+        obj = EmptyModel(_id=obj_id)
+        channel = self._get_notify_channel(obj=obj, action='delete') or f'{self.service_name}:{obj_id}:delete'
+        try:
+            await self.rdb.publish(channel=channel, message=json.dumps({'id': str(obj_id)}))
+        except redis_exceptions.RedisError as e:
+            logger.error(e)
 
     @staticmethod
     def _prepare_pub_message(obj: BaseModel) -> str:
