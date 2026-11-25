@@ -1,5 +1,6 @@
 import re
 from collections.abc import AsyncIterator
+from datetime import datetime
 from enum import StrEnum
 from inspect import isclass
 from re import Match, Pattern
@@ -626,7 +627,33 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
 
         return result.inserted_ids
 
-    async def update(  # noqa: C901
+    def _prepare_update_document(
+        self, data: dict[str, Any], operator: MongoUpdateOperator, now: datetime
+    ) -> tuple[dict[str, dict[str, Any]], dict[str, datetime]]:
+        auto_now_data = dict.fromkeys(getattr(self.Meta, 'auto_now_fields', ()) or (), now)
+
+        if operator == MongoUpdateOperator.set:
+            data.update(auto_now_data)
+            return {operator: data}, {}
+
+        if not auto_now_data:
+            return {operator: data}, {}
+
+        update_paths = set(data)
+        if operator == MongoUpdateOperator.rename:
+            update_paths.update(path for path in data.values() if isinstance(path, str))
+
+        # MongoDB rejects overlapping paths even when they use different operators.
+        if any(
+            path == field or path.startswith(f'{field}.') or field.startswith(f'{path}.')
+            for path in update_paths
+            for field in auto_now_data
+        ):
+            return {operator: data}, auto_now_data
+
+        return {operator: data, '$set': auto_now_data}, {}
+
+    async def update(
         self,
         query: PyObjectId | dict[str, Any],
         data: ModelType | dict[str, Any],
@@ -645,15 +672,8 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         if isinstance(data, BaseModel):
             data = data.model_dump(exclude={'id'}, exclude_unset=exclude_unset)
 
-        after_update_data = {}
-
         now = utc_now()
-        if hasattr(self.Meta, 'auto_now_fields') and self.Meta.auto_now_fields:
-            for field in self.Meta.auto_now_fields:
-                if operator == MongoUpdateOperator.set:
-                    data[field] = now
-                else:
-                    after_update_data[field] = now
+        update_document, after_update_data = self._prepare_update_document(data, operator, now)
 
         document_count_to_update = await self.count(prepared_query, session=session)
 
@@ -662,27 +682,24 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         elif document_count_to_update > 1:
             raise MultipleObjectsFoundException(obj_type=self.Meta.collection_name, query=prepared_query)
 
-        pre_result_projection = {'_id': 1}
-        if upsert and hasattr(self.Meta, 'auto_now_add_fields') and self.Meta.auto_now_add_fields:
-            pre_result_projection.update(dict.fromkeys(self.Meta.auto_now_add_fields, 1))
+        auto_now_add_fields = (getattr(self.Meta, 'auto_now_add_fields', ()) or ()) if upsert else ()
+        pre_result_projection = {'_id': 1, **dict.fromkeys(auto_now_add_fields, 1)}
 
         result = await self.collection.find_one_and_update(
             filter=prepared_query,
-            update={operator: data},
+            update=update_document,
             upsert=upsert,
             return_document=ReturnDocument.AFTER,
             session=session,
             projection=pre_result_projection,
         )
-        result_id = PyObjectId(result['_id'])
-
-        if upsert and hasattr(self.Meta, 'auto_now_add_fields') and self.Meta.auto_now_add_fields:
-            for field in self.Meta.auto_now_add_fields:
-                if result.get(field) is None:
-                    after_update_data[field] = now
-
         if result is None:
             raise ObjectUpdateException()
+
+        result_id = PyObjectId(result['_id'])
+        for field in auto_now_add_fields:
+            if result.get(field) is None:
+                after_update_data[field] = now
 
         if after_update_data:
             await self.collection.update_one(
@@ -709,30 +726,21 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         if isinstance(data, BaseModel):
             data = data.model_dump(exclude={'id'}, exclude_unset=exclude_unset)
 
-        after_update_data = {}
-
-        if hasattr(self.Meta, 'auto_now_fields') and self.Meta.auto_now_fields:
-            now = utc_now()
-            for field in self.Meta.auto_now_fields:
-                if operator == MongoUpdateOperator.set:
-                    data[field] = now
-                else:
-                    after_update_data[field] = now
+        update_document, after_update_data = self._prepare_update_document(data, operator, utc_now())
 
         documents_to_update = await self.get_list(query=prepared_query, session=session, projection_model=EmptyModel)
         documents_ids_to_update = [doc.id for doc in documents_to_update]
+        update_filter = {'_id': {'$in': documents_ids_to_update}}
 
         await self.collection.update_many(
-            filter={'_id': {'$in': documents_ids_to_update}},
-            update={operator: data},
+            filter=update_filter,
+            update=update_document,
             upsert=False,
             session=session,
         )
 
         if after_update_data:
-            await self.collection.update_one(
-                filter={'_id': {'$in': documents_ids_to_update}}, update={'$set': after_update_data}, session=session
-            )
+            await self.collection.update_many(filter=update_filter, update={'$set': after_update_data}, session=session)
 
         return documents_ids_to_update
 
