@@ -13,11 +13,14 @@ from pydantic_core.core_schema import (
     str_schema,
 )
 
+from saltbox_sdk.db.mongo.item_query import ITEM_OPERATORS, item_conditions
 from saltbox_sdk.db.schemas_base import SourceOnlySchema
+from saltbox_sdk.exceptions import SaltBoxValidationException
 from saltbox_sdk.utilities.helpers import Iso8601ZDatetime
 
 IS_PYDANTIC_V2_10 = int(pydantic.VERSION.split('.')[0]) >= 2 and int(pydantic.VERSION.split('.')[1]) >= 10
 ALLOWED_MONGO_PIPELINE_QUERY_KEYS = [
+    *ITEM_OPERATORS,
     '$and',
     '$or',
     '$nor',
@@ -59,31 +62,50 @@ ALLOWED_MONGO_QUERY_KEYS = [
 ]
 
 
-def validate_mongo_query(value: dict[str, Any]) -> dict[str, Any]:
+def _validate_item_group(key: str, conditions: Any, allowed_keys: list[str]) -> None:
+    try:
+        for _, predicate in item_conditions({ITEM_OPERATORS[key]: conditions}):
+            if isinstance(predicate, dict):
+                _validate_query(predicate, allowed_keys)
+    except SaltBoxValidationException as error:
+        raise ValueError(error.detail) from error
+
+
+def _validate_query(value: dict, allowed_keys: list[str]) -> None:
     for key, val in value.items():
-        if key.startswith('$') and key not in ALLOWED_MONGO_QUERY_KEYS:
+        if key.startswith('$') and key not in allowed_keys:
             msg = f'Invalid or unsupported operator `{key}`'
             raise ValueError(msg)
-        if isinstance(val, dict):
-            validate_mongo_query(val)
-
+        if key in ITEM_OPERATORS:
+            _validate_item_group(key, val, allowed_keys)
+        elif isinstance(val, dict):
+            _validate_query(val, allowed_keys)
+        elif key in ('$and', '$or', '$nor') and isinstance(val, list):
+            for child in val:
+                if isinstance(child, dict):
+                    _validate_nested_item_groups(child, allowed_keys)
         if key in {'$and', '$or', '$in'} and not isinstance(val, list):
             msg = f'Value for `{key}` must be a `list`'
             raise ValueError(msg)
+
+
+def _validate_nested_item_groups(node: dict, allowed_keys: list[str]) -> None:
+    for key, value in node.items():
+        if key in ITEM_OPERATORS:
+            _validate_query({key: value}, allowed_keys)
+        elif key in ('$and', '$or', '$nor') and isinstance(value, list):
+            for child in value:
+                if isinstance(child, dict):
+                    _validate_nested_item_groups(child, allowed_keys)
+
+
+def validate_mongo_query(value: dict[str, Any]) -> dict[str, Any]:
+    _validate_query(value, ALLOWED_MONGO_QUERY_KEYS)
     return value
 
 
 def validate_pipeline_query(value: dict[str, Any]) -> dict[str, Any]:
-    for key, val in value.items():
-        if key.startswith('$') and key not in ALLOWED_MONGO_PIPELINE_QUERY_KEYS:
-            msg = f'Invalid or unsupported operator `{key}`'
-            raise ValueError(msg)
-        if isinstance(val, dict):
-            validate_pipeline_query(val)
-
-        if key in {'$and', '$or', '$in'} and not isinstance(val, list):
-            msg = f'Value for `{key}` must be a `list`'
-            raise ValueError(msg)
+    _validate_query(value, ALLOWED_MONGO_PIPELINE_QUERY_KEYS)
     return value
 
 

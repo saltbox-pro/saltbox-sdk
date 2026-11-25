@@ -23,6 +23,13 @@ from saltbox_sdk.config.logger_config import logger
 from saltbox_sdk.config.mongo_config import MONGO_SETTINGS
 from saltbox_sdk.db.abc_repository import AbstractRepository
 from saltbox_sdk.db.mongo.aggregations import AggregationsStore
+from saltbox_sdk.db.mongo.item_query import (
+    ITEM_OPERATORS,
+    item_conditions,
+    map_item_fields,
+    resolve_item_path,
+    scalar_item_match,
+)
 from saltbox_sdk.db.mongo.schemas_base import EmptyModel, PyObjectId, SortOrder
 from saltbox_sdk.exceptions import (
     DuplicateKeyException,
@@ -98,6 +105,7 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
         collection_name: ClassVar[str]
         auto_now_add_fields: ClassVar[list[str]]
         auto_now_fields: ClassVar[list[str]]
+        item_paths: ClassVar[tuple[str, ...]] = ()
         query_overrides: ClassVar[dict[Pattern, str]]
         aggregations: ClassVar[AggregationsStore] = AggregationsStore()
         collection_index_to_keys: ClassVar[dict[str, _IndexKeyHint]]
@@ -140,6 +148,25 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
 
         return query_overrides
 
+    async def prepare_item_group(self, query: dict, fields: list[str]) -> dict:
+        path = resolve_item_path(fields, self.default_model, getattr(self.Meta, 'item_paths', ()))
+
+        if all(field == path for field in fields):
+            predicate = scalar_item_match(query)
+        elif path in fields:
+            msg = f'Cannot mix item values and item attributes for {path}'
+            raise SaltBoxValidationException(msg)
+        else:
+
+            def relative_field(key: str, value: Any) -> dict:
+                if isinstance(value, str) and PyObjectId.is_valid(value):
+                    value = {'$in': [value, PyObjectId(value)]}
+                return {key[len(path) + 1 :]: value}
+
+            predicate = map_item_fields(query, relative_field)
+
+        return {path: {'$elemMatch': predicate}}
+
     async def __prepare_query__(self, query: PyObjectId | dict[str, Any] | None) -> dict[str, Any]:  # noqa: C901
         if isinstance(query, PyObjectId):
             return {'_id': query}
@@ -162,7 +189,14 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
                         _query[condition_key] = condition_value
 
             for data_key, data_value in data.items():
+                if data_key in ITEM_OPERATORS:
+                    group = {ITEM_OPERATORS[data_key]: data_value}
+                    fields = [field for field, _ in item_conditions(group)]
+                    merge_condition(await self.prepare_item_group(group, fields))
+                    continue
+
                 is_override = False
+
                 for field_re, field_callback in query_overrides.items():
                     field_match = field_re.match(data_key)
                     if field_match:
@@ -181,18 +215,18 @@ class BaseMongoRepository[T: BaseModel](AbstractRepository[T]):
                     continue
 
                 if data_value is None:
-                    _query[data_key] = data_value
+                    merge_condition({data_key: data_value})
                 elif isinstance(data_value, dict):
-                    _query[data_key] = await recursive_override(data_value)
+                    merge_condition({data_key: await recursive_override(data_value)})
                 elif isinstance(data_value, list) and data_key not in ['$in', '$nin']:
-                    _query[data_key] = [await recursive_override(item_value) for item_value in data_value]
+                    merge_condition({data_key: [await recursive_override(item_value) for item_value in data_value]})
                 elif isinstance(data_value, PyObjectId):
-                    _query[data_key] = data_value
+                    merge_condition({data_key: data_value})
                 else:
                     try:
                         merge_condition({'$or': [{data_key: data_value}, {data_key: PyObjectId(data_value)}]})
                     except Exception:
-                        _query[data_key] = data_value
+                        merge_condition({data_key: data_value})
             return _query
 
         query = await recursive_override(query)
